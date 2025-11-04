@@ -27,8 +27,8 @@ type Config struct {
 
 type Shift struct {
 	// RFC3339 timestamps
-	Start   string   `json:"start"`
-	End     string   `json:"end"`
+	Start   int64    `json:"start"`
+	End     int64    `json:"end"`
 	UserIDs []string `json:"user_ids"`
 }
 
@@ -42,9 +42,9 @@ var (
 	store        Store
 	loc          *time.Location
 	dg           *discordgo.Session
-	remindedKey  = make(map[string]bool)
-	activatedKey = make(map[string]bool)
-	endedKey     = make(map[string]bool)
+	remindedKey  = make(map[int64]bool)
+	activatedKey = make(map[int64]bool)
+	endedKey     = make(map[int64]bool)
 )
 
 func main() {
@@ -225,12 +225,12 @@ func onInteractionCreate(s *discordgo.Session, ic *discordgo.InteractionCreate) 
 		cur, next := currentAndNextShift(now)
 		var b strings.Builder
 		fmt.Fprintf(&b, "**Now:** %s\n", mentionUsers(cur.UserIDs))
-		fmt.Fprintf(&b, "Time: %s -> %s\n", cur.Start, cur.End)
+		fmt.Fprintf(&b, "Time: <t:%d:R> -> <t:%d:R>\n", cur.Start, cur.End)
 		if len(cur.UserIDs) == 0 {
 			fmt.Fprintf(&b, "_No active shifts._\n")
 		}
 		fmt.Fprintf(&b, "\n**Next:** %s\n", mentionUsers(next.UserIDs))
-		fmt.Fprintf(&b, "Time: %s -> %s\n", next.Start, next.End)
+		fmt.Fprintf(&b, "Time: <t:%d:R> -> <t:%d:R>\n", next.Start, next.End)
 		if len(store.Volunteers) > 0 {
 			fmt.Fprintf(&b, "\n**Volunteers:** %s\n", mentionUsers(store.Volunteers))
 		}
@@ -275,9 +275,9 @@ func onInteractionCreate(s *discordgo.Session, ic *discordgo.InteractionCreate) 
 	case "sync":
 		now := time.Now().In(loc)
 		applied, errs := applyShiftState(now)
-		msg := "Sync done." + applied
+		msg := "Sync done. " + applied
 		if len(errs) > 0 {
-			msg += "\nError:\n- " + strings.Join(errs, "\n-")
+			msg += "\nError:\n- " + strings.Join(errs, "\n- ")
 		}
 		reply(s, ic, msg)
 
@@ -320,18 +320,6 @@ func hasRoleNow(userID string) bool {
 
 // Schedule helpers
 
-func parse(t string) (time.Time, error) {
-	tt, err := time.ParseInLocation(time.RFC3339, t, loc)
-	if err != nil {
-		tt, err2 := time.ParseInLocation("2006-01-02 15:04", t, loc)
-		if err2 != nil {
-			return time.Time{}, err
-		}
-		return tt, nil
-	}
-	return tt, nil
-}
-
 func schedulerLoop() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -345,38 +333,30 @@ func schedulerLoop() {
 
 func applyShiftState(now time.Time) (string, []string) {
 	var errs []string
-	type event struct{ action, userID, when string }
+	type event struct {
+		action string
+		userID string
+		when   int64
+	}
 	var applied []event
 
 	for _, sh := range store.Schedule {
-		start, err1 := parse(sh.Start)
-		end, err2 := parse(sh.End)
-		if err1 != nil || err2 != nil {
-			if err1 != nil {
-				errs = append(errs, "parse start: "+err1.Error())
-			}
-			if err2 != nil {
-				errs = append(errs, "parse end: "+err2.Error())
-			}
-			continue
-		}
+		start := time.Unix(sh.Start, 0).In(loc)
+		end := time.Unix(sh.End, 0).In(loc)
 
 		for _, uid := range sh.UserIDs {
-			rKey := sh.Start + "|" + uid
-			aKey := sh.Start + "|" + uid
-			eKey := sh.End + "|" + uid
 
 			// 1) Remind T-20m (once)
-			if start.After(now) && start.Sub(now) <= 20*time.Minute && !remindedKey[rKey] {
+			if start.After(now) && start.Sub(now) <= 20*time.Minute && !remindedKey[sh.Start] {
 				if err := remindUser(uid, start); err != nil {
 					errs = append(errs, "remind "+uid+": "+err.Error())
 				} else {
-					remindedKey[rKey] = true
+					remindedKey[sh.Start] = true
 					applied = append(applied, event{"reminded", uid, sh.Start})
 				}
 			}
 			// 2) Activate at start (once)
-			if (now.Equal(start) || (now.After(start) && now.Before(end))) && !activatedKey[aKey] {
+			if (now.Equal(start) || (now.After(start) && now.Before(end))) && !activatedKey[sh.Start] {
 				if !hasRoleNow(uid) {
 					if err := addRole(uid); err != nil {
 						errs = append(errs, "add role "+uid+": "+err.Error())
@@ -384,10 +364,10 @@ func applyShiftState(now time.Time) (string, []string) {
 						applied = append(applied, event{"activated", uid, sh.Start})
 					}
 				}
-				activatedKey[aKey] = true
+				activatedKey[sh.Start] = true
 			}
 			// 3) Deactivate at end (once) unless user is a volunteer
-			if now.After(end) && !endedKey[eKey] {
+			if now.After(end) && !endedKey[sh.End] {
 				if !contains(store.Volunteers, uid) && hasRoleNow(uid) {
 					if err := removeRole(uid); err != nil {
 						errs = append(errs, "remove role "+uid+": "+err.Error())
@@ -395,7 +375,7 @@ func applyShiftState(now time.Time) (string, []string) {
 						applied = append(applied, event{"ended", uid, sh.End})
 					}
 				}
-				endedKey[eKey] = true
+				endedKey[sh.End] = true
 			}
 		}
 	}
@@ -405,7 +385,7 @@ func applyShiftState(now time.Time) (string, []string) {
 	}
 	var parts []string
 	for _, a := range applied {
-		parts = append(parts, fmt.Sprintf("%s %s (%s)", a.action, a.userID, a.when))
+		parts = append(parts, fmt.Sprintf("%s %s (<t:%d:R>)", a.action, a.userID, a.when))
 	}
 	return strings.Join(parts, ", "), errs
 }
@@ -424,11 +404,8 @@ func remindUser(userID string, start time.Time) error {
 func isUserScheduledNow(userID string) bool {
 	now := time.Now().In(loc)
 	for _, sh := range store.Schedule {
-		start, err1 := parse(sh.Start)
-		end, err2 := parse(sh.End)
-		if err1 != nil || err2 != nil {
-			continue
-		}
+		start := time.Unix(sh.Start, 0).In(loc)
+		end := time.Unix(sh.End, 0).In(loc)
 		if (now.Equal(start) || (now.After(start) && now.Before(end))) && contains(sh.UserIDs, userID) {
 			return true
 		}
@@ -443,11 +420,8 @@ func currentAndNextShift(now time.Time) (Shift, Shift) {
 	}
 	var parsedSh []parsed
 	for _, sh := range store.Schedule {
-		ps, err1 := parse(sh.Start)
-		pe, err2 := parse(sh.End)
-		if err1 != nil || err2 != nil {
-			continue
-		}
+		ps := time.Unix(sh.Start, 0).In(loc)
+		pe := time.Unix(sh.End, 0).In(loc)
 		if pe.Before(ps) {
 			continue
 		}
@@ -459,8 +433,8 @@ func currentAndNextShift(now time.Time) (Shift, Shift) {
 	var next Shift
 	foundCur := false
 	for _, p := range parsedSh {
-		ps, _ := parse(p.Start)
-		pe, _ := parse(p.End)
+		ps := time.Unix(p.Start, 0).In(loc)
+		pe := time.Unix(p.End, 0).In(loc)
 		if (now.Equal(ps) || (now.After(ps) && now.Before(pe))) && !foundCur {
 			cur = p.Shift
 			foundCur = true
