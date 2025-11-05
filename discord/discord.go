@@ -1,4 +1,5 @@
-package main
+// Package discord/discord.go
+package discord
 
 // TODO: Make this into a package
 
@@ -9,12 +10,16 @@ import (
 	"strings"
 	"time"
 
+	"lauzhack-bot/config"
+	"lauzhack-bot/scheduler"
+	"lauzhack-bot/utils"
+
 	"github.com/bwmarrin/discordgo"
 )
 
 const FlagEphemeral = 64
 
-func onInteractionCreate(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+func OnInteractionCreate(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 	if ic.Type != discordgo.InteractionApplicationCommand {
 		return
 	}
@@ -53,7 +58,7 @@ func handleHelpdeskCommand(s *discordgo.Session, ic *discordgo.InteractionCreate
 
 // /admin helpdesk
 func handleAdminCommand(s *discordgo.Session, ic *discordgo.InteractionCreate, data discordgo.ApplicationCommandInteractionData) {
-	if !userHasRole(ic.Member, cfg.OrganizerRoleID) && !isAdmin(ic) {
+	if !userHasRole(ic.Member, config.Cfg.OrganizerRoleID) && !isAdmin(ic) {
 		reply(s, ic, "You do not have permission to run this command.")
 		return
 	}
@@ -84,19 +89,19 @@ func handleAdminCommand(s *discordgo.Session, ic *discordgo.InteractionCreate, d
 func handleJoin(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 	userID := ic.Member.User.ID
 
-	if hasRoleNow(userID) {
+	if HasRoleNow(userID) {
 		reply(s, ic, "You already have the helpdesk role.")
 		return
 	}
 
-	if err := addRole(userID); err != nil {
+	if err := AddRole(userID); err != nil {
 		reply(s, ic, "Failed to add role (permissions?): "+err.Error())
 		return
 	}
 
-	if !contains(store.Volunteers, userID) {
-		store.Volunteers = append(store.Volunteers, userID)
-		_ = saveStore()
+	if !utils.Contains(config.Store.Volunteers, userID) {
+		config.Store.Volunteers = append(config.Store.Volunteers, userID)
+		_ = config.SaveStore()
 	}
 
 	reply(s, ic, "You are on helpdesk.")
@@ -104,13 +109,13 @@ func handleJoin(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 
 func handleLeave(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 	userID := ic.Member.User.ID
-	if contains(store.Volunteers, userID) {
-		store.Volunteers = remove(store.Volunteers, userID)
-		_ = saveStore()
+	if utils.Contains(config.Store.Volunteers, userID) {
+		config.Store.Volunteers = utils.Remove(config.Store.Volunteers, userID)
+		_ = config.SaveStore()
 	}
 
-	if !isUserScheduledNow(userID) {
-		if err := removeRole(userID); err != nil {
+	if !scheduler.IsUserScheduledNow(userID) {
+		if err := RemoveRole(userID); err != nil {
 			reply(s, ic, "Failed to remove role (permissions?): "+err.Error())
 			return
 		}
@@ -120,8 +125,8 @@ func handleLeave(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 }
 
 func handleList(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-	now := time.Now().In(loc)
-	cur, next := currentAndNextShift(now)
+	now := time.Now().In(config.Loc)
+	cur, next := scheduler.CurrentAndNextShift(now)
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "Helpdesk Schedule",
@@ -133,7 +138,7 @@ func handleList(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 	if cur.Start != 0 {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   "Now",
-			Value:  fmt.Sprintf("%s\n<t:%d:R> → <t:%d:R>", mentionUsers(cur.UserIDs), cur.Start, cur.End),
+			Value:  fmt.Sprintf("%s\n<t:%d:R> → <t:%d:R>", utils.MentionUsers(cur.UserIDs), cur.Start, cur.End),
 			Inline: false,
 		})
 	} else {
@@ -147,15 +152,15 @@ func handleList(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 	if next.Start != 0 {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   "Next",
-			Value:  fmt.Sprintf("%s\n<t:%d:R> → <t:%d:R>", mentionUsers(next.UserIDs), next.Start, next.End),
+			Value:  fmt.Sprintf("%s\n<t:%d:R> → <t:%d:R>", utils.MentionUsers(next.UserIDs), next.Start, next.End),
 			Inline: false,
 		})
 	}
 
-	if len(store.Volunteers) > 0 {
+	if len(config.Store.Volunteers) > 0 {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   "Volunteers",
-			Value:  mentionUsers(store.Volunteers),
+			Value:  utils.MentionUsers(config.Store.Volunteers),
 			Inline: false,
 		})
 	}
@@ -178,11 +183,11 @@ func handleAdminAdd(s *discordgo.Session, ic *discordgo.InteractionCreate, sub *
 		return
 	}
 
-	if err := addRole(user.ID); err != nil {
+	if err := AddRole(user.ID); err != nil {
 		reply(s, ic, "Failed to add role: "+err.Error())
 		return
 	}
-	reply(s, ic, fmt.Sprintf("Added %s to helpdesk role.", mentionUsers([]string{user.ID})))
+	reply(s, ic, fmt.Sprintf("Added %s to helpdesk role.", utils.MentionUsers([]string{user.ID})))
 }
 
 func handleAdminRemove(s *discordgo.Session, ic *discordgo.InteractionCreate, sub *discordgo.ApplicationCommandInteractionDataOption) {
@@ -192,20 +197,20 @@ func handleAdminRemove(s *discordgo.Session, ic *discordgo.InteractionCreate, su
 		return
 	}
 
-	if err := removeRole(user.ID); err != nil {
+	if err := RemoveRole(user.ID); err != nil {
 		reply(s, ic, "Failed to remove role: "+err.Error())
 		return
 	}
-	if contains(store.Volunteers, user.ID) {
-		store.Volunteers = remove(store.Volunteers, user.ID)
-		_ = saveStore()
+	if utils.Contains(config.Store.Volunteers, user.ID) {
+		config.Store.Volunteers = utils.Remove(config.Store.Volunteers, user.ID)
+		_ = config.SaveStore()
 	}
-	reply(s, ic, fmt.Sprintf("Removed %s from helpdesk role.", mentionUsers([]string{user.ID})))
+	reply(s, ic, fmt.Sprintf("Removed %s from helpdesk role.", utils.MentionUsers([]string{user.ID})))
 }
 
 func handleAdminSync(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-	now := time.Now().In(loc)
-	applied, errs := applyShiftState(now)
+	now := time.Now().In(config.Loc)
+	applied, errs := scheduler.ApplyShiftState(now)
 	msg := "Sync done. " + applied
 	if len(errs) > 0 {
 		msg += "\nError:\n- " + strings.Join(errs, "\n- ")
@@ -232,7 +237,7 @@ func userHasRole(m *discordgo.Member, roleID string) bool {
 }
 
 // Role ops
-func addRole(userID string) error {
+func AddRole(userID string) error {
 	for i := range 3 {
 		if err := dg.GuildMemberRoleAdd(cfg.GuildID, userID, cfg.RoleID); err == nil {
 			return nil
@@ -242,7 +247,7 @@ func addRole(userID string) error {
 	return fmt.Errorf("addRole %s failed after retries", userID)
 }
 
-func removeRole(userID string) error {
+func RemoveRole(userID string) error {
 	for i := range 3 {
 		if err := dg.GuildMemberRoleRemove(cfg.GuildID, userID, cfg.RoleID); err == nil {
 			return nil
@@ -252,7 +257,7 @@ func removeRole(userID string) error {
 	return fmt.Errorf("removeRole %s failed after retries", userID)
 }
 
-func hasRoleNow(userID string) bool {
+func HasRoleNow(userID string) bool {
 	m, err := dg.GuildMember(cfg.GuildID, userID)
 	if err != nil {
 		return false
@@ -260,7 +265,7 @@ func hasRoleNow(userID string) bool {
 	return slices.Contains(m.Roles, cfg.RoleID)
 }
 
-func getAllMembers(guildID string) ([]*discordgo.Member, error) {
+func GetAllMembers(guildID string) ([]*discordgo.Member, error) {
 	var members []*discordgo.Member
 	after := ""
 	for {

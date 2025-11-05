@@ -1,11 +1,12 @@
-package main
+// Package utils/utils.go
+package utils
 
 import (
 	"slices"
 	"strings"
 )
 
-func mentionUsers(ids []string) string {
+func MentionUsers(ids []string) string {
 	if len(ids) == 0 {
 		return "(none)"
 	}
@@ -18,11 +19,11 @@ func mentionUsers(ids []string) string {
 	return strings.Join(parts, " ")
 }
 
-func contains(arr []string, v string) bool {
+func Contains(arr []string, v string) bool {
 	return slices.Contains(arr, v)
 }
 
-func remove(arr []string, v string) []string {
+func Remove(arr []string, v string) []string {
 	out := arr[:0]
 	for _, x := range arr {
 		if x != v {

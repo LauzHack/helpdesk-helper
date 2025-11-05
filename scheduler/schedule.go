@@ -1,4 +1,5 @@
-package main
+// Package scheduler/schedule.go
+package scheduler
 
 import (
 	"fmt"
@@ -8,17 +9,26 @@ import (
 	"strings"
 	"time"
 
+	"lauzhack-bot/config"
 	"lauzhack-bot/data"
+	"lauzhack-bot/discord"
+	"lauzhack-bot/utils"
 )
 
-func schedulerLoop() {
+var (
+	remindedKey  = make(map[string]bool)
+	activatedKey = make(map[string]bool)
+	endedKey     = make(map[string]bool)
+)
+
+func SchedulerLoop() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	for {
-		now := time.Now().In(loc)
+		now := time.Now().In(config.Loc)
 		cleanupState(now)
-		_, _ = applyShiftState(now)
+		_, _ = ApplyShiftState(now)
 		<-ticker.C
 	}
 }
@@ -56,21 +66,21 @@ func cleanupState(now time.Time) {
 
 func activeShiftsForUser(userID string, now time.Time) []data.Shift {
 	var res []data.Shift
-	for _, sh := range store.Schedule {
-		start := time.Unix(sh.Start, 0).In(loc)
-		end := time.Unix(sh.End, 0).In(loc)
-		if (now.Equal(start) || (now.After(start) && now.Before(end))) && contains(sh.UserIDs, userID) {
+	for _, sh := range config.Store.Schedule {
+		start := time.Unix(sh.Start, 0).In(config.Loc)
+		end := time.Unix(sh.End, 0).In(config.Loc)
+		if (now.Equal(start) || (now.After(start) && now.Before(end))) && utils.Contains(sh.UserIDs, userID) {
 			res = append(res, sh)
 		}
 	}
 	return res
 }
 
-func isUserScheduledNow(userID string) bool {
-	return len(activeShiftsForUser(userID, time.Now().In(loc))) > 0
+func IsUserScheduledNow(userID string) bool {
+	return len(activeShiftsForUser(userID, time.Now().In(config.Loc))) > 0
 }
 
-func applyShiftState(now time.Time) (string, []string) {
+func ApplyShiftState(now time.Time) (string, []string) {
 	var errs []string
 	type event struct {
 		action string
@@ -80,9 +90,9 @@ func applyShiftState(now time.Time) (string, []string) {
 	var applied []event
 
 	// Main schedule loop
-	for _, sh := range store.Schedule {
-		start := time.Unix(sh.Start, 0).In(loc)
-		end := time.Unix(sh.End, 0).In(loc)
+	for _, sh := range config.Store.Schedule {
+		start := time.Unix(sh.Start, 0).In(config.Loc)
+		end := time.Unix(sh.End, 0).In(config.Loc)
 
 		for _, uid := range sh.UserIDs {
 			rkey := fmt.Sprintf("%d|%s|remind", sh.Start, uid)
@@ -100,8 +110,8 @@ func applyShiftState(now time.Time) (string, []string) {
 
 			// Activation (active window)
 			if now.After(start.Add(-10*time.Second)) && now.Before(end) {
-				if !hasRoleNow(uid) {
-					if err := addRole(uid); err != nil {
+				if !discord.HasRoleNow(uid) {
+					if err := discord.AddRole(uid); err != nil {
 						errs = append(errs, "add role "+uid+": "+err.Error())
 					} else {
 						applied = append(applied, event{"activated", uid, sh.Start})
@@ -111,8 +121,8 @@ func applyShiftState(now time.Time) (string, []string) {
 
 			// Deactivation (after end)
 			if now.After(end) && !endedKey[ekey] {
-				if !contains(store.Volunteers, uid) && hasRoleNow(uid) {
-					if err := removeRole(uid); err != nil {
+				if !utils.Contains(config.Store.Volunteers, uid) && discord.HasRoleNow(uid) {
+					if err := discord.RemoveRole(uid); err != nil {
 						errs = append(errs, "remove role "+uid+": "+err.Error())
 					} else {
 						applied = append(applied, event{"ended", uid, sh.End})
@@ -124,22 +134,22 @@ func applyShiftState(now time.Time) (string, []string) {
 	}
 
 	// Reconciliation pass
-	guildMembers, err := getAllMembers(cfg.GuildID)
+	guildMembers, err := discord.GetAllMembers(config.Cfg.GuildID)
 	if err == nil {
 		nowUnix := now.Unix()
 		var shouldHave []string
 
 		// Gather all active + volunteer IDs
-		for _, sh := range store.Schedule {
+		for _, sh := range config.Store.Schedule {
 			if nowUnix >= sh.Start && nowUnix <= sh.End {
 				shouldHave = append(shouldHave, sh.UserIDs...)
 			}
 		}
-		shouldHave = append(shouldHave, store.Volunteers...)
+		shouldHave = append(shouldHave, config.Store.Volunteers...)
 
 		for _, m := range guildMembers {
-			if slices.Contains(m.Roles, cfg.RoleID) && !slices.Contains(shouldHave, m.User.ID) {
-				if err := removeRole(m.User.ID); err != nil {
+			if slices.Contains(m.Roles, config.Cfg.RoleID) && !slices.Contains(shouldHave, m.User.ID) {
+				if err := discord.RemoveRole(m.User.ID); err != nil {
 					errs = append(errs, fmt.Sprintf("reconcile remove %s: %v", m.User.ID, err))
 				} else {
 					applied = append(applied, event{"reconciled-remove", m.User.ID, nowUnix})
@@ -198,21 +208,21 @@ func remindUser(userID string, start time.Time) error {
 	const reminderChannelID = "888853355747770429"
 	msg := fmt.Sprintf(
 		"<@%s> Reminder: your helpdesk shift starts <t:%d:R> (%s). Please head to the helpdesk desk during that timeframe.",
-		userID, start.Unix(), cfg.Timezone,
+		userID, start.Unix(), config.Cfg.Timezone,
 	)
 	_, err := dg.ChannelMessageSend(reminderChannelID, msg)
 	return err
 }
 
-func currentAndNextShift(now time.Time) (data.Shift, data.Shift) {
+func CurrentAndNextShift(now time.Time) (data.Shift, data.Shift) {
 	type parsed struct {
 		data.Shift
 		pStart time.Time
 	}
 	var parsedSh []parsed
-	for _, sh := range store.Schedule {
-		ps := time.Unix(sh.Start, 0).In(loc)
-		pe := time.Unix(sh.End, 0).In(loc)
+	for _, sh := range config.Store.Schedule {
+		ps := time.Unix(sh.Start, 0).In(config.Loc)
+		pe := time.Unix(sh.End, 0).In(config.Loc)
 		if pe.Before(ps) {
 			continue
 		}
@@ -224,8 +234,8 @@ func currentAndNextShift(now time.Time) (data.Shift, data.Shift) {
 	var next data.Shift
 	foundCur := false
 	for _, p := range parsedSh {
-		ps := time.Unix(p.Start, 0).In(loc)
-		pe := time.Unix(p.End, 0).In(loc)
+		ps := time.Unix(p.Start, 0).In(config.Loc)
+		pe := time.Unix(p.End, 0).In(config.Loc)
 		if (now.Equal(ps) || (now.After(ps) && now.Before(pe))) && !foundCur {
 			cur = p.Shift
 			foundCur = true
