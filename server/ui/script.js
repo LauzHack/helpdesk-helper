@@ -148,7 +148,7 @@ function renderUserChips(cell, ids) {
   // Add dropdown
   const select = document.createElement("select");
   const placeholder = document.createElement("option");
-  placeholder.textContent = "+ Add member";
+  placeholder.textContent = "+ Add organizer";
   placeholder.value = "";
   select.appendChild(placeholder);
 
