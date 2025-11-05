@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"lauzhack-bot/botapi"
 	"lauzhack-bot/config"
-	"lauzhack-bot/data"
+	"lauzhack-bot/types"
 	"lauzhack-bot/utils"
 	"slices"
 	"sort"
@@ -68,8 +68,8 @@ func cleanupState(now time.Time) {
 	}
 }
 
-func activeShiftsForUser(userID string, now time.Time) []data.Shift {
-	var res []data.Shift
+func activeShiftsForUser(userID string, now time.Time) []types.Shift {
+	var res []types.Shift
 	store := config.GetStore()
 	for _, sh := range store.Schedule {
 		start := time.Unix(sh.Start, 0)
@@ -211,9 +211,9 @@ func ApplyShiftState(now time.Time) (string, []string) {
 	return b.String(), errs
 }
 
-func CurrentAndNextShift(now time.Time) (data.Shift, data.Shift) {
+func CurrentAndNextShift(now time.Time) (types.Shift, types.Shift) {
 	type parsed struct {
-		data.Shift
+		types.Shift
 		pStart time.Time
 	}
 	store := config.GetStore()
@@ -228,8 +228,8 @@ func CurrentAndNextShift(now time.Time) (data.Shift, data.Shift) {
 	}
 	sort.Slice(parsedSh, func(i, j int) bool { return parsedSh[i].pStart.Before(parsedSh[j].pStart) })
 
-	var cur data.Shift
-	var next data.Shift
+	var cur types.Shift
+	var next types.Shift
 	foundCur := false
 	for _, p := range parsedSh {
 		ps := time.Unix(p.Start, 0)
@@ -245,11 +245,11 @@ func CurrentAndNextShift(now time.Time) (data.Shift, data.Shift) {
 	}
 
 	if !foundCur {
-		cur = data.Shift{}
+		cur = types.Shift{}
 	}
 
 	if next.Start == 0 && next.End == 0 {
-		next = data.Shift{Start: 0, End: 0, UserIDs: nil}
+		next = types.Shift{Start: 0, End: 0, UserIDs: nil}
 	}
 
 	return cur, next

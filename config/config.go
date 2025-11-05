@@ -4,16 +4,16 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"lauzhack-bot/data"
+	"lauzhack-bot/types"
 	"os"
 	"path/filepath"
 	"sync"
 )
 
 var (
-	Cfg     data.Config
+	Cfg     types.Config
 	storeMu sync.RWMutex
-	store   data.Store
+	store   types.Store
 )
 
 func LoadConfig(path string) error {
@@ -40,7 +40,7 @@ func LoadStore() error {
 
 	if _, err := os.Stat(Cfg.DataFile); err != nil {
 		if os.IsNotExist(err) {
-			store = data.Store{Volunteers: []string{}, Schedule: []data.Shift{}}
+			store = types.Store{Volunteers: []string{}, Schedule: []types.Shift{}}
 			return saveStoreLocked()
 		}
 		return err

@@ -1,5 +1,5 @@
 // Package data/types.go
-package data
+package types
 
 type Config struct {
 	Token           string `json:"token"`

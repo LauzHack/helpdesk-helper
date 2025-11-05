@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"lauzhack-bot/config"
-	"lauzhack-bot/data"
+	"lauzhack-bot/types"
 	"net/http"
 	"path"
 	"slices"
@@ -52,7 +52,7 @@ func handleSchedule(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		writeJSON(w, http.StatusOK, config.GetStore())
 	case http.MethodPost:
-		var updated data.Store
+		var updated types.Store
 		if err := json.NewDecoder(r.Body).Decode(&updated); err != nil {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
@@ -73,7 +73,7 @@ func handleShiftCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var s data.Shift
+	var s types.Shift
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
@@ -83,7 +83,7 @@ func handleShiftCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var newIdx int
-	config.UpdateStore(func(st *data.Store) {
+	config.UpdateStore(func(st *types.Store) {
 		st.Schedule = append(st.Schedule, s)
 		newIdx = len(st.Schedule) - 1
 	})
@@ -100,7 +100,7 @@ func handleShiftByIndex(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodPut:
-		var s data.Shift
+		var s types.Shift
 		if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
@@ -109,7 +109,7 @@ func handleShiftByIndex(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		ok := configSafeUpdateIndex(i, func(st *data.Store) { st.Schedule[i] = s })
+		ok := configSafeUpdateIndex(i, func(st *types.Store) { st.Schedule[i] = s })
 		if !ok {
 			http.Error(w, "index out of range", http.StatusNotFound)
 			return
@@ -117,7 +117,7 @@ func handleShiftByIndex(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 
 	case http.MethodDelete:
-		ok := configSafeUpdateIndex(i, func(st *data.Store) {
+		ok := configSafeUpdateIndex(i, func(st *types.Store) {
 			st.Schedule = append(st.Schedule[:i], st.Schedule[i+1:]...)
 		})
 		if !ok {
@@ -143,7 +143,7 @@ func handleVolunteers(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid user_id", http.StatusBadRequest)
 			return
 		}
-		config.UpdateStore(func(st *data.Store) {
+		config.UpdateStore(func(st *types.Store) {
 			if !contains(st.Volunteers, body.UserID) {
 				st.Volunteers = append(st.Volunteers, body.UserID)
 			}
@@ -164,7 +164,7 @@ func handleVolunteerByID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	config.UpdateStore(func(st *data.Store) {
+	config.UpdateStore(func(st *types.Store) {
 		out := st.Volunteers[:0]
 		for _, v := range st.Volunteers {
 			if v != id {
@@ -238,9 +238,9 @@ func handleOrganizers(w http.ResponseWriter, r *http.Request) {
 
 // Helpers / validation
 
-func configSafeUpdateIndex(i int, fn func(st *data.Store)) bool {
+func configSafeUpdateIndex(i int, fn func(st *types.Store)) bool {
 	ok := true
-	config.UpdateStore(func(st *data.Store) {
+	config.UpdateStore(func(st *types.Store) {
 		if i < 0 || i >= len(st.Schedule) {
 			ok = false
 			return
@@ -250,7 +250,7 @@ func configSafeUpdateIndex(i int, fn func(st *data.Store)) bool {
 	return ok
 }
 
-func validateStore(st data.Store) error {
+func validateStore(st types.Store) error {
 	for _, s := range st.Schedule {
 		if err := validateShift(s); err != nil {
 			return err
@@ -259,7 +259,7 @@ func validateStore(st data.Store) error {
 	return nil
 }
 
-func validateShift(s data.Shift) error {
+func validateShift(s types.Shift) error {
 	if s.Start <= 0 || s.End <= 0 {
 		return errors.New("start/end must be positive unix seconds")
 	}
@@ -274,8 +274,8 @@ func validateShift(s data.Shift) error {
 	return nil
 }
 
-func currentAndNext(st data.Store, now time.Time) (data.Shift, data.Shift) {
-	var cur, next data.Shift
+func currentAndNext(st types.Store, now time.Time) (types.Shift, types.Shift) {
+	var cur, next types.Shift
 	for _, sh := range st.Schedule {
 		ps := time.Unix(sh.Start, 0)
 		pe := time.Unix(sh.End, 0)
