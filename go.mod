@@ -1,4 +1,4 @@
-module helpdesk-helper
+module lauzhack-bot
 
 go 1.25.3
 
