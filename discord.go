@@ -1,5 +1,7 @@
 package main
 
+// TODO: Make this into a package
+
 import (
 	"fmt"
 	"log"
