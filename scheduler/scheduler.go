@@ -3,23 +3,27 @@ package scheduler
 
 import (
 	"fmt"
+	"lauzhack-bot/botapi"
+	"lauzhack-bot/config"
+	"lauzhack-bot/data"
+	"lauzhack-bot/utils"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"lauzhack-bot/config"
-	"lauzhack-bot/data"
-	"lauzhack-bot/discord"
-	"lauzhack-bot/utils"
 )
 
 var (
+	bot          botapi.BotAPI
 	remindedKey  = make(map[string]bool)
 	activatedKey = make(map[string]bool)
 	endedKey     = make(map[string]bool)
 )
+
+func Init(b botapi.BotAPI) {
+	bot = b
+}
 
 func SchedulerLoop() {
 	ticker := time.NewTicker(time.Minute)
@@ -100,7 +104,7 @@ func ApplyShiftState(now time.Time) (string, []string) {
 
 			// Reminder (T-20m)
 			if start.After(now) && start.Sub(now) <= 20*time.Minute && !remindedKey[rkey] {
-				if err := remindUser(uid, start); err != nil {
+				if err := bot.SendReminder(uid, start); err != nil {
 					errs = append(errs, "remind "+uid+": "+err.Error())
 				} else {
 					remindedKey[rkey] = true
@@ -110,8 +114,8 @@ func ApplyShiftState(now time.Time) (string, []string) {
 
 			// Activation (active window)
 			if now.After(start.Add(-10*time.Second)) && now.Before(end) {
-				if !discord.HasRoleNow(uid) {
-					if err := discord.AddRole(uid); err != nil {
+				if !bot.HasRoleNow(uid) {
+					if err := bot.AddRole(uid); err != nil {
 						errs = append(errs, "add role "+uid+": "+err.Error())
 					} else {
 						applied = append(applied, event{"activated", uid, sh.Start})
@@ -121,8 +125,8 @@ func ApplyShiftState(now time.Time) (string, []string) {
 
 			// Deactivation (after end)
 			if now.After(end) && !endedKey[ekey] {
-				if !utils.Contains(config.Store.Volunteers, uid) && discord.HasRoleNow(uid) {
-					if err := discord.RemoveRole(uid); err != nil {
+				if !utils.Contains(config.Store.Volunteers, uid) && bot.HasRoleNow(uid) {
+					if err := bot.RemoveRole(uid); err != nil {
 						errs = append(errs, "remove role "+uid+": "+err.Error())
 					} else {
 						applied = append(applied, event{"ended", uid, sh.End})
@@ -134,7 +138,7 @@ func ApplyShiftState(now time.Time) (string, []string) {
 	}
 
 	// Reconciliation pass
-	guildMembers, err := discord.GetAllMembers(config.Cfg.GuildID)
+	guildMembers, err := bot.GetAllMembers(config.Cfg.GuildID)
 	if err == nil {
 		nowUnix := now.Unix()
 		var shouldHave []string
@@ -149,7 +153,7 @@ func ApplyShiftState(now time.Time) (string, []string) {
 
 		for _, m := range guildMembers {
 			if slices.Contains(m.Roles, config.Cfg.RoleID) && !slices.Contains(shouldHave, m.User.ID) {
-				if err := discord.RemoveRole(m.User.ID); err != nil {
+				if err := bot.RemoveRole(m.User.ID); err != nil {
 					errs = append(errs, fmt.Sprintf("reconcile remove %s: %v", m.User.ID, err))
 				} else {
 					applied = append(applied, event{"reconciled-remove", m.User.ID, nowUnix})
@@ -202,16 +206,6 @@ func ApplyShiftState(now time.Time) (string, []string) {
 	}
 
 	return b.String(), errs
-}
-
-func remindUser(userID string, start time.Time) error {
-	const reminderChannelID = "888853355747770429"
-	msg := fmt.Sprintf(
-		"<@%s> Reminder: your helpdesk shift starts <t:%d:R> (%s). Please head to the helpdesk desk during that timeframe.",
-		userID, start.Unix(), config.Cfg.Timezone,
-	)
-	_, err := dg.ChannelMessageSend(reminderChannelID, msg)
-	return err
 }
 
 func CurrentAndNextShift(now time.Time) (data.Shift, data.Shift) {

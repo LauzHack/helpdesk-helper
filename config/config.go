@@ -4,11 +4,10 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"lauzhack-bot/data"
 	"os"
 	"path/filepath"
 	"time"
-
-	"lauzhack-bot/data"
 )
 
 var (
@@ -25,7 +24,7 @@ func LoadConfig(path string) error {
 	if err := json.Unmarshal(b, &Cfg); err != nil {
 		return err
 	}
-	if Cfg.Token == "" || Cfg.GuildID == "" || Cfg.RoleID == "" || Cfg.Timezone == "" || Cfg.DataFile == "" || Cfg.OrganizerRoleID == "" {
+	if Cfg.Token == "" || Cfg.GuildID == "" || Cfg.RoleID == "" || Cfg.Timezone == "" || Cfg.DataFile == "" || Cfg.OrganizerRoleID == "" || Cfg.LogChannelID == "" {
 		return errors.New("missing required fields in config file")
 	}
 	if !filepath.IsAbs(Cfg.DataFile) {

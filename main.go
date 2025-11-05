@@ -2,21 +2,18 @@ package main
 
 import (
 	"fmt"
+	"lauzhack-bot/config"
+	"lauzhack-bot/discord"
+	"lauzhack-bot/scheduler"
+	"lauzhack-bot/server"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"lauzhack-bot/config"
-	"lauzhack-bot/discord"
-	"lauzhack-bot/scheduler"
-	"lauzhack-bot/server"
-
 	"github.com/bwmarrin/discordgo"
 )
-
-var dg *discordgo.Session
 
 func main() {
 	// Config + store
@@ -38,10 +35,11 @@ func main() {
 	server.Start(config.Cfg.DataFile, ":8080")
 
 	// Discord session
-	dg, err = discordgo.New("Bot " + config.Cfg.Token)
+	dg, err := discordgo.New("Bot " + config.Cfg.Token)
 	if err != nil {
 		log.Fatalf("discord: %v", err)
 	}
+
 	dg.Identify.Intents = discordgo.IntentsAll
 	dg.AddHandler(discord.OnInteractionCreate)
 
@@ -61,7 +59,8 @@ func main() {
 		log.Printf("command registration: %v", err)
 	}
 
-	// Scheduler
+	bot := &discord.DiscordBot{Session: dg}
+	scheduler.Init(bot)
 	go scheduler.SchedulerLoop()
 
 	// Wait
