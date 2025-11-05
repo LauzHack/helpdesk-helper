@@ -52,6 +52,7 @@ func handleAdd(ctx *context.CommandContext, ic *discordgo.InteractionCreate, sub
 
 func handleRemove(ctx *context.CommandContext, ic *discordgo.InteractionCreate, sub *discordgo.ApplicationCommandInteractionDataOption) {
 	user := sub.Options[0].UserValue(ctx.Session)
+	store := config.GetStore()
 	if user == nil {
 		ctx.Reply(ic, "User not found.")
 		return
@@ -60,15 +61,15 @@ func handleRemove(ctx *context.CommandContext, ic *discordgo.InteractionCreate, 
 		ctx.Reply(ic, "Failed to remove role: "+err.Error())
 		return
 	}
-	if utils.Contains(config.Store.Volunteers, user.ID) {
-		config.Store.Volunteers = utils.Remove(config.Store.Volunteers, user.ID)
+	if utils.Contains(store.Volunteers, user.ID) {
+		store.Volunteers = utils.Remove(store.Volunteers, user.ID)
 		_ = config.SaveStore()
 	}
 	ctx.Reply(ic, fmt.Sprintf("Removed %s from helpdesk role.", utils.MentionUsers([]string{user.ID})))
 }
 
 func handleSync(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
-	now := time.Now().In(config.Loc)
+	now := time.Now()
 	applied, errs := scheduler.ApplyShiftState(now)
 	msg := "Sync done. " + applied
 	if len(errs) > 0 {

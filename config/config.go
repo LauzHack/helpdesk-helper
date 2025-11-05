@@ -1,4 +1,4 @@
-// Package config/config.go
+// Package config
 package config
 
 import (
@@ -7,13 +7,13 @@ import (
 	"lauzhack-bot/data"
 	"os"
 	"path/filepath"
-	"time"
+	"sync"
 )
 
 var (
-	Cfg   data.Config
-	Store data.Store
-	Loc   *time.Location
+	Cfg     data.Config
+	storeMu sync.RWMutex
+	store   data.Store
 )
 
 func LoadConfig(path string) error {
@@ -24,7 +24,8 @@ func LoadConfig(path string) error {
 	if err := json.Unmarshal(b, &Cfg); err != nil {
 		return err
 	}
-	if Cfg.Token == "" || Cfg.GuildID == "" || Cfg.RoleID == "" || Cfg.Timezone == "" || Cfg.DataFile == "" || Cfg.OrganizerRoleID == "" || Cfg.LogChannelID == "" {
+	if Cfg.Token == "" || Cfg.GuildID == "" || Cfg.RoleID == "" || Cfg.DataFile == "" ||
+		Cfg.OrganizerRoleID == "" || Cfg.LogChannelID == "" {
 		return errors.New("missing required fields in config file")
 	}
 	if !filepath.IsAbs(Cfg.DataFile) {
@@ -34,10 +35,13 @@ func LoadConfig(path string) error {
 }
 
 func LoadStore() error {
+	storeMu.Lock()
+	defer storeMu.Unlock()
+
 	if _, err := os.Stat(Cfg.DataFile); err != nil {
 		if os.IsNotExist(err) {
-			Store = data.Store{Volunteers: []string{}, Schedule: []data.Shift{}}
-			return SaveStore()
+			store = data.Store{Volunteers: []string{}, Schedule: []data.Shift{}}
+			return saveStoreLocked()
 		}
 		return err
 	}
@@ -45,12 +49,19 @@ func LoadStore() error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(b, &Store)
+	return json.Unmarshal(b, &store)
 }
 
 func SaveStore() error {
+	storeMu.RLock()
+	defer storeMu.RUnlock()
+	return saveStoreLocked()
+}
+
+// Internal unsafe variant — must hold lock
+func saveStoreLocked() error {
 	tmp := Cfg.DataFile + ".tmp"
-	b, _ := json.MarshalIndent(Store, "", "  ")
+	b, _ := json.MarshalIndent(store, "", "  ")
 	f, err := os.Create(tmp)
 	if err != nil {
 		return err

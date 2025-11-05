@@ -1,3 +1,4 @@
+// Package user
 package user
 
 import (
@@ -11,7 +12,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// /helpdesk
 func HandleHelpdeskCommand(ctx *context.CommandContext, ic *discordgo.InteractionCreate, data discordgo.ApplicationCommandInteractionData) {
 	if len(data.Options) == 0 {
 		ctx.Reply(ic, "No subcommand.")
@@ -31,6 +31,7 @@ func HandleHelpdeskCommand(ctx *context.CommandContext, ic *discordgo.Interactio
 }
 
 func handleJoin(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
+	store := config.GetStore()
 	userID := ic.Member.User.ID
 
 	if ctx.Bot.HasRoleNow(userID) {
@@ -43,8 +44,8 @@ func handleJoin(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 		return
 	}
 
-	if !utils.Contains(config.Store.Volunteers, userID) {
-		config.Store.Volunteers = append(config.Store.Volunteers, userID)
+	if !utils.Contains(store.Volunteers, userID) {
+		store.Volunteers = append(store.Volunteers, userID)
 		_ = config.SaveStore()
 	}
 
@@ -53,9 +54,10 @@ func handleJoin(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 
 func handleLeave(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 	userID := ic.Member.User.ID
+	store := config.GetStore()
 
-	if utils.Contains(config.Store.Volunteers, userID) {
-		config.Store.Volunteers = utils.Remove(config.Store.Volunteers, userID)
+	if utils.Contains(store.Volunteers, userID) {
+		store.Volunteers = utils.Remove(store.Volunteers, userID)
 		_ = config.SaveStore()
 	}
 
@@ -70,8 +72,9 @@ func handleLeave(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 }
 
 func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
-	now := time.Now().In(config.Loc)
+	now := time.Now()
 	cur, next := scheduler.CurrentAndNextShift(now)
+	store := config.GetStore()
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "Helpdesk Schedule",
@@ -105,10 +108,10 @@ func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 	}
 
 	// Volunteers
-	if len(config.Store.Volunteers) > 0 {
+	if len(store.Volunteers) > 0 {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   "Volunteers",
-			Value:  utils.MentionUsers(config.Store.Volunteers),
+			Value:  utils.MentionUsers(store.Volunteers),
 			Inline: false,
 		})
 	}

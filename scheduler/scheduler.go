@@ -30,7 +30,7 @@ func SchedulerLoop() {
 	defer ticker.Stop()
 
 	for {
-		now := time.Now().In(config.Loc)
+		now := time.Now()
 		cleanupState(now)
 		_, _ = ApplyShiftState(now)
 		<-ticker.C
@@ -70,9 +70,10 @@ func cleanupState(now time.Time) {
 
 func activeShiftsForUser(userID string, now time.Time) []data.Shift {
 	var res []data.Shift
-	for _, sh := range config.Store.Schedule {
-		start := time.Unix(sh.Start, 0).In(config.Loc)
-		end := time.Unix(sh.End, 0).In(config.Loc)
+	store := config.GetStore()
+	for _, sh := range store.Schedule {
+		start := time.Unix(sh.Start, 0)
+		end := time.Unix(sh.End, 0)
 		if (now.Equal(start) || (now.After(start) && now.Before(end))) && utils.Contains(sh.UserIDs, userID) {
 			res = append(res, sh)
 		}
@@ -81,7 +82,7 @@ func activeShiftsForUser(userID string, now time.Time) []data.Shift {
 }
 
 func IsUserScheduledNow(userID string) bool {
-	return len(activeShiftsForUser(userID, time.Now().In(config.Loc))) > 0
+	return len(activeShiftsForUser(userID, time.Now())) > 0
 }
 
 func ApplyShiftState(now time.Time) (string, []string) {
@@ -93,10 +94,12 @@ func ApplyShiftState(now time.Time) (string, []string) {
 	}
 	var applied []event
 
+	store := config.GetStore()
+
 	// Main schedule loop
-	for _, sh := range config.Store.Schedule {
-		start := time.Unix(sh.Start, 0).In(config.Loc)
-		end := time.Unix(sh.End, 0).In(config.Loc)
+	for _, sh := range store.Schedule {
+		start := time.Unix(sh.Start, 0)
+		end := time.Unix(sh.End, 0)
 
 		for _, uid := range sh.UserIDs {
 			rkey := fmt.Sprintf("%d|%s|remind", sh.Start, uid)
@@ -125,7 +128,7 @@ func ApplyShiftState(now time.Time) (string, []string) {
 
 			// Deactivation (after end)
 			if now.After(end) && !endedKey[ekey] {
-				if !utils.Contains(config.Store.Volunteers, uid) && bot.HasRoleNow(uid) {
+				if !utils.Contains(store.Volunteers, uid) && bot.HasRoleNow(uid) {
 					if err := bot.RemoveRole(uid); err != nil {
 						errs = append(errs, "remove role "+uid+": "+err.Error())
 					} else {
@@ -144,12 +147,12 @@ func ApplyShiftState(now time.Time) (string, []string) {
 		var shouldHave []string
 
 		// Gather all active + volunteer IDs
-		for _, sh := range config.Store.Schedule {
+		for _, sh := range store.Schedule {
 			if nowUnix >= sh.Start && nowUnix <= sh.End {
 				shouldHave = append(shouldHave, sh.UserIDs...)
 			}
 		}
-		shouldHave = append(shouldHave, config.Store.Volunteers...)
+		shouldHave = append(shouldHave, store.Volunteers...)
 
 		for _, m := range guildMembers {
 			if slices.Contains(m.Roles, config.Cfg.RoleID) && !slices.Contains(shouldHave, m.User.ID) {
@@ -213,10 +216,11 @@ func CurrentAndNextShift(now time.Time) (data.Shift, data.Shift) {
 		data.Shift
 		pStart time.Time
 	}
+	store := config.GetStore()
 	var parsedSh []parsed
-	for _, sh := range config.Store.Schedule {
-		ps := time.Unix(sh.Start, 0).In(config.Loc)
-		pe := time.Unix(sh.End, 0).In(config.Loc)
+	for _, sh := range store.Schedule {
+		ps := time.Unix(sh.Start, 0)
+		pe := time.Unix(sh.End, 0)
 		if pe.Before(ps) {
 			continue
 		}
@@ -228,8 +232,8 @@ func CurrentAndNextShift(now time.Time) (data.Shift, data.Shift) {
 	var next data.Shift
 	foundCur := false
 	for _, p := range parsedSh {
-		ps := time.Unix(p.Start, 0).In(config.Loc)
-		pe := time.Unix(p.End, 0).In(config.Loc)
+		ps := time.Unix(p.Start, 0)
+		pe := time.Unix(p.End, 0)
 		if (now.Equal(ps) || (now.After(ps) && now.Before(pe))) && !foundCur {
 			cur = p.Shift
 			foundCur = true

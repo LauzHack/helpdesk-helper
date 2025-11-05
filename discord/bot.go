@@ -14,6 +14,10 @@ type DiscordBot struct {
 	Session *discordgo.Session
 }
 
+func New(session *discordgo.Session) *DiscordBot {
+	return &DiscordBot{Session: session}
+}
+
 // Role ops
 
 func (d *DiscordBot) AddRole(userID string) error {
@@ -63,8 +67,8 @@ func (d *DiscordBot) GetAllMembers(guildID string) ([]*discordgo.Member, error) 
 
 func (d *DiscordBot) SendReminder(userID string, start time.Time) error {
 	msg := fmt.Sprintf(
-		"<@%s> Reminder: your helpdesk shift starts <t:%d:R> (%s). Please head to the helpdesk desk during that timeframe.",
-		userID, start.Unix(), config.Cfg.Timezone,
+		"<@%s> Reminder: your helpdesk shift starts <t:%d:R>. Please head to the helpdesk desk during that timeframe.",
+		userID, start.Unix(),
 	)
 	_, err := d.Session.ChannelMessageSend(config.Cfg.LogChannelID, msg)
 	return err

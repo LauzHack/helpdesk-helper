@@ -10,7 +10,7 @@ import (
 func Reply(s *discordgo.Session, ic *discordgo.InteractionCreate, content string) {
 	if err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Content: content, Flags: 64},
+		Data: &discordgo.InteractionResponseData{Content: content, Flags: 1 << 6},
 	}); err != nil {
 		log.Printf("interaction respond: %v", err)
 	}

@@ -3,23 +3,153 @@
   <head>
     <meta charset="utf-8" />
     <title>Helpdesk Schedule Editor</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <style>
-      body {
-        font-family: sans-serif;
-        max-width: 700px;
-        margin: 40px auto;
+      :root {
+        --gap: 10px;
+        --pad: 12px;
+        --radius: 10px;
       }
-      textarea {
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 32px auto;
+        max-width: 980px;
+      }
+      h1 {
+        margin: 0 0 16px;
+      }
+      .row {
+        display: flex;
+        gap: var(--gap);
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .card {
+        border: 1px solid #ddd;
+        border-radius: var(--radius);
+        padding: var(--pad);
+        margin-bottom: 16px;
+      }
+      table {
         width: 100%;
-        height: 400px;
-        font-family: monospace;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+        vertical-align: top;
+      }
+      input,
+      select,
+      button,
+      textarea {
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+      }
+      button.primary {
+        background: #0b5fff;
+        color: white;
+        border: none;
+      }
+      button.danger {
+        background: #c62828;
+        color: white;
+        border: none;
+      }
+      .muted {
+        color: #666;
+        font-size: 0.9em;
+      }
+      .chip {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        background: #f2f2f2;
+        margin: 2px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin: 12px 0;
+      }
+      .error {
+        color: #c62828;
+      }
+      .ok {
+        color: #2e7d32;
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 800px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
-    <h2>Schedule Editor</h2>
-    <textarea id="data"></textarea><br />
-    <button id="save">Save</button>
+    <h1>Helpdesk Schedule Editor</h1>
+
+    <div class="card">
+      <div class="row">
+        <div class="muted">Now: <span id="now">—</span></div>
+        <div class="muted">Current: <span id="cur">—</span></div>
+        <div class="muted">Next: <span id="next">—</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <button id="reload">Reload</button>
+        <button id="export">Export JSON</button>
+        <button id="save" class="primary">Save All</button>
+      </div>
+
+      <div class="grid">
+        <section>
+          <h3>Shifts</h3>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 200px">Start</th>
+                <th style="width: 200px">End</th>
+                <th>Users (IDs)</th>
+                <th style="width: 140px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="shift-rows"></tbody>
+          </table>
+          <div style="margin-top: 8px">
+            <button id="add-shift">+ Add Shift</button>
+          </div>
+        </section>
+
+        <section>
+          <h3>Unscheduled members</h3>
+          <div id="vol-list"></div>
+          <div style="margin-top: 8px" class="row">
+            <input
+              id="vol-id"
+              placeholder="Discord user ID (e.g., 123...)"
+              class="mono"
+            />
+            <button id="add-vol">Add</button>
+          </div>
+        </section>
+      </div>
+
+      <div id="msg" class="muted" style="margin-top: 8px"></div>
+    </div>
+
     <script src="script.js"></script>
   </body>
 </html>

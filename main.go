@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -20,14 +19,11 @@ func main() {
 	if len(os.Args) < 2 {
 		log.Fatalf("Usage: %s <config.json>", os.Args[0])
 	}
+
 	if err := config.LoadConfig(os.Args[1]); err != nil {
 		log.Fatalf("config: %v", err)
 	}
-	var err error
-	config.Loc, err = time.LoadLocation(config.Cfg.Timezone)
-	if err != nil {
-		log.Fatalf("timezone: %v", err)
-	}
+
 	if err := config.LoadStore(); err != nil {
 		log.Fatalf("store: %v", err)
 	}
@@ -59,12 +55,14 @@ func main() {
 		log.Printf("command registration: %v", err)
 	}
 
-	bot := &discord.DiscordBot{Session: dg}
+	bot := discord.New(dg)
+	discord.Init(bot)
 	scheduler.Init(bot)
+	server.Init(dg)
 	go scheduler.SchedulerLoop()
 
 	// Wait
-	log.Printf("running. guild=%s role=%s tz=%s", config.Cfg.GuildID, config.Cfg.RoleID, config.Cfg.Timezone)
+	log.Printf("running. guild=%s role=%s", config.Cfg.GuildID, config.Cfg.RoleID)
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop

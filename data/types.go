@@ -7,7 +7,6 @@ type Config struct {
 	RoleID          string `json:"role_id"`
 	OrganizerRoleID string `json:"organizer_role_id"`
 	LogChannelID    string `json:"log_channel_id"`
-	Timezone        string `json:"timezone"`
 	DataFile        string `json:"data_file"`
 }
 
