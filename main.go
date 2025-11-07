@@ -1,21 +1,24 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"lauzhack-bot/config"
-	"lauzhack-bot/discord"
-	"lauzhack-bot/scheduler"
-	"lauzhack-bot/server"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"lauzhack-bot/config"
+	"lauzhack-bot/discord"
+	"lauzhack-bot/scheduler"
+	"lauzhack-bot/server"
+	"lauzhack-bot/store"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 func main() {
-	// Config + store
 	if len(os.Args) < 2 {
 		log.Fatalf("Usage: %s <config.json>", os.Args[0])
 	}
@@ -24,13 +27,16 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	if err := config.LoadStore(); err != nil {
+	if err := store.Init(config.Cfg.DataFile); err != nil {
 		log.Fatalf("store: %v", err)
 	}
 
-	server.Start(config.Cfg.DataFile, ":8080")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// Discord session
+	serverAddr := ":8080"
+	go server.Start(ctx, serverAddr)
+
 	dg, err := discordgo.New("Bot " + config.Cfg.Token)
 	if err != nil {
 		log.Fatalf("discord: %v", err)
@@ -40,7 +46,7 @@ func main() {
 	dg.AddHandler(discord.OnInteractionCreate)
 
 	if err := dg.Open(); err != nil {
-		log.Fatalf("open ws: %v", err)
+		log.Fatalf("discord open: %v", err)
 	}
 	defer func() {
 		if err := dg.Close(); err != nil {
@@ -48,25 +54,31 @@ func main() {
 		}
 	}()
 
-	_ = dg.UpdateGameStatus(0, "Managing helpdesk shifts")
-
-	// Command registration
 	if err := registerCommands(dg, config.Cfg.GuildID); err != nil {
-		log.Printf("command registration: %v", err)
+		log.Printf("command registration failed: %v", err)
 	}
 
 	bot := discord.New(dg)
 	discord.Init(bot)
 	scheduler.Init(bot)
 	server.Init(dg)
+
 	go scheduler.SchedulerLoop()
 
-	// Wait
-	log.Printf("running. guild=%s role=%s", config.Cfg.GuildID, config.Cfg.RoleID)
+	log.Printf("helpdesk-helper running | guild=%s | role=%s | server=%s",
+		config.Cfg.GuildID, config.Cfg.RoleID, serverAddr)
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
-	log.Println("shutting down")
+
+	log.Println("shutdown signal received")
+	cancel()
+
+	// Allow in-flight operations to finish
+	time.Sleep(1 * time.Second)
+
+	log.Println("shutdown complete")
 }
 
 func registerCommands(dg *discordgo.Session, guildID string) error {
@@ -105,7 +117,6 @@ func registerCommands(dg *discordgo.Session, guildID string) error {
 		}
 		log.Printf("registered /%s (id=%s)", created.Name, created.ID)
 	}
-
 	return nil
 }
 

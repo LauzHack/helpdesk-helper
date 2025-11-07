@@ -3,12 +3,13 @@ package admin
 
 import (
 	"fmt"
-	"lauzhack-bot/config"
-	"lauzhack-bot/discord/context"
-	"lauzhack-bot/scheduler"
-	"lauzhack-bot/utils"
 	"strings"
 	"time"
+
+	"lauzhack-bot/discord/context"
+	"lauzhack-bot/scheduler"
+	"lauzhack-bot/store"
+	"lauzhack-bot/utils"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -18,6 +19,7 @@ func HandleAdminCommand(ctx *context.CommandContext, ic *discordgo.InteractionCr
 		ctx.Reply(ic, "Missing group.")
 		return
 	}
+
 	group := data.Options[0]
 	if group.Name != "helpdesk" || len(group.Options) == 0 {
 		ctx.Reply(ic, "Unknown admin group or subcommand.")
@@ -43,37 +45,53 @@ func handleAdd(ctx *context.CommandContext, ic *discordgo.InteractionCreate, sub
 		ctx.Reply(ic, "User not found.")
 		return
 	}
+
 	if err := ctx.Bot.AddRole(user.ID); err != nil {
 		ctx.Reply(ic, "Failed to add role: "+err.Error())
 		return
 	}
-	ctx.Reply(ic, fmt.Sprintf("Added %s to helpdesk role.", utils.MentionUsers([]string{user.ID})))
+
+	if err := store.AddVolunteer(user.ID); err != nil {
+		ctx.Reply(ic, "Failed to add volunteer: "+err.Error())
+		return
+	}
+
+	ctx.Reply(ic, fmt.Sprintf("✅ Added %s to helpdesk.", utils.MentionUsers([]string{user.ID})))
 }
 
 func handleRemove(ctx *context.CommandContext, ic *discordgo.InteractionCreate, sub *discordgo.ApplicationCommandInteractionDataOption) {
 	user := sub.Options[0].UserValue(ctx.Session)
-	store := config.GetStore()
 	if user == nil {
 		ctx.Reply(ic, "User not found.")
 		return
 	}
+
+	// Remove Discord role
 	if err := ctx.Bot.RemoveRole(user.ID); err != nil {
 		ctx.Reply(ic, "Failed to remove role: "+err.Error())
 		return
 	}
-	if utils.Contains(store.Volunteers, user.ID) {
-		store.Volunteers = utils.Remove(store.Volunteers, user.ID)
-		_ = config.SaveStore()
+
+	// Remove from volunteer list (if present)
+	if err := store.RemoveVolunteer(user.ID); err != nil {
+		ctx.Reply(ic, "Failed to update store: "+err.Error())
+		return
 	}
-	ctx.Reply(ic, fmt.Sprintf("Removed %s from helpdesk role.", utils.MentionUsers([]string{user.ID})))
+
+	ctx.Reply(ic, fmt.Sprintf("🗑️ Removed %s from helpdesk.", utils.MentionUsers([]string{user.ID})))
 }
 
 func handleSync(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 	now := time.Now()
-	applied, errs := scheduler.ApplyShiftState(now)
-	msg := "Sync done. " + applied
+	summary, errs := scheduler.ApplyShiftState(now)
+
+	var b strings.Builder
+	b.WriteString("**Helpdesk sync complete.**\n\n")
+	b.WriteString(summary)
+
 	if len(errs) > 0 {
-		msg += "\nError:\n- " + strings.Join(errs, "\n- ")
+		b.WriteString("\n⚠️ Errors:\n- " + strings.Join(errs, "\n- "))
 	}
-	ctx.Reply(ic, msg)
+
+	ctx.Reply(ic, b.String())
 }

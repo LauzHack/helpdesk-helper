@@ -3,11 +3,12 @@ package user
 
 import (
 	"fmt"
-	"lauzhack-bot/config"
+	"time"
+
 	"lauzhack-bot/discord/context"
 	"lauzhack-bot/scheduler"
+	"lauzhack-bot/store"
 	"lauzhack-bot/utils"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -30,8 +31,8 @@ func HandleHelpdeskCommand(ctx *context.CommandContext, ic *discordgo.Interactio
 	}
 }
 
+// /helpdesk join
 func handleJoin(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
-	store := config.GetStore()
 	userID := ic.Member.User.ID
 
 	if ctx.Bot.HasRoleNow(userID) {
@@ -44,21 +45,21 @@ func handleJoin(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 		return
 	}
 
-	if !utils.Contains(store.Volunteers, userID) {
-		store.Volunteers = append(store.Volunteers, userID)
-		_ = config.SaveStore()
+	if err := store.AddVolunteer(userID); err != nil {
+		ctx.Reply(ic, "Failed to register you in the roster: "+err.Error())
+		return
 	}
 
-	ctx.Reply(ic, "You are now part of the helpdesk.")
+	ctx.Reply(ic, "✅ You joined the helpdesk.")
 }
 
+// /helpdesk leave
 func handleLeave(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 	userID := ic.Member.User.ID
-	store := config.GetStore()
 
-	if utils.Contains(store.Volunteers, userID) {
-		store.Volunteers = utils.Remove(store.Volunteers, userID)
-		_ = config.SaveStore()
+	if err := store.RemoveVolunteer(userID); err != nil {
+		ctx.Reply(ic, "Failed to update roster: "+err.Error())
+		return
 	}
 
 	if !scheduler.IsUserScheduledNow(userID) {
@@ -71,10 +72,11 @@ func handleLeave(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 	ctx.Reply(ic, "You have left the helpdesk.")
 }
 
+// /helpdesk list
 func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 	now := time.Now()
-	cur, next := scheduler.CurrentAndNextShift(now)
-	store := config.GetStore()
+	cur, next := store.CurrentAndNextShift(now)
+	volunteers := store.ListVolunteers()
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "Helpdesk Schedule",
@@ -107,15 +109,22 @@ func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 		})
 	}
 
-	// Volunteers
-	if len(store.Volunteers) > 0 {
+	// Volunteers list
+	if len(volunteers) > 0 {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   "Volunteers",
-			Value:  utils.MentionUsers(store.Volunteers),
+			Value:  utils.MentionUsers(volunteers),
+			Inline: false,
+		})
+	} else {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   "Volunteers",
+			Value:  "(none registered)",
 			Inline: false,
 		})
 	}
 
+	// Send ephemeral reply
 	if err := ctx.Session.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{

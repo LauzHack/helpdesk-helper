@@ -4,17 +4,13 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"lauzhack-bot/types"
 	"os"
 	"path/filepath"
-	"sync"
+
+	"lauzhack-bot/types"
 )
 
-var (
-	Cfg     types.Config
-	storeMu sync.RWMutex
-	store   types.Store
-)
+var Cfg types.Config
 
 func LoadConfig(path string) error {
 	b, err := os.ReadFile(path)
@@ -32,50 +28,4 @@ func LoadConfig(path string) error {
 		Cfg.DataFile = filepath.Join(filepath.Dir(path), Cfg.DataFile)
 	}
 	return nil
-}
-
-func LoadStore() error {
-	storeMu.Lock()
-	defer storeMu.Unlock()
-
-	if _, err := os.Stat(Cfg.DataFile); err != nil {
-		if os.IsNotExist(err) {
-			store = types.Store{Volunteers: []string{}, Schedule: []types.Shift{}}
-			return saveStoreLocked()
-		}
-		return err
-	}
-	b, err := os.ReadFile(Cfg.DataFile)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(b, &store)
-}
-
-func SaveStore() error {
-	storeMu.RLock()
-	defer storeMu.RUnlock()
-	return saveStoreLocked()
-}
-
-// Internal unsafe variant — must hold lock
-func saveStoreLocked() error {
-	tmp := Cfg.DataFile + ".tmp"
-	b, _ := json.MarshalIndent(store, "", "  ")
-	f, err := os.Create(tmp)
-	if err != nil {
-		return err
-	}
-	if _, err := f.Write(b); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp, Cfg.DataFile)
 }

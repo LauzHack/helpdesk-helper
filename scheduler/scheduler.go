@@ -1,17 +1,16 @@
-// Package scheduler/schedule.go
+// Package scheduler
 package scheduler
 
 import (
 	"fmt"
-	"lauzhack-bot/botapi"
-	"lauzhack-bot/config"
-	"lauzhack-bot/types"
-	"lauzhack-bot/utils"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"lauzhack-bot/botapi"
+	"lauzhack-bot/config"
+	"lauzhack-bot/store"
 )
 
 var (
@@ -39,42 +38,31 @@ func SchedulerLoop() {
 
 func cleanupState(now time.Time) {
 	cutoff := now.Add(-2 * time.Hour).Unix() // anything ending >2h ago
-	for k := range remindedKey {
-		parts := strings.Split(k, "|")
-		if len(parts) < 1 {
-			continue
-		}
-		if ts, err := strconv.ParseInt(parts[0], 10, 64); err == nil && ts < cutoff {
-			delete(remindedKey, k)
-		}
-	}
-	for k := range activatedKey {
-		parts := strings.Split(k, "|")
-		if len(parts) < 1 {
-			continue
-		}
-		if ts, err := strconv.ParseInt(parts[0], 10, 64); err == nil && ts < cutoff {
-			delete(activatedKey, k)
+
+	cleanup := func(m map[string]bool) {
+		for k := range m {
+			parts := strings.Split(k, "|")
+			if len(parts) < 1 {
+				continue
+			}
+			if ts, err := strconv.ParseInt(parts[0], 10, 64); err == nil && ts < cutoff {
+				delete(m, k)
+			}
 		}
 	}
-	for k := range endedKey {
-		parts := strings.Split(k, "|")
-		if len(parts) < 1 {
-			continue
-		}
-		if ts, err := strconv.ParseInt(parts[0], 10, 64); err == nil && ts < cutoff {
-			delete(endedKey, k)
-		}
-	}
+
+	cleanup(remindedKey)
+	cleanup(activatedKey)
+	cleanup(endedKey)
 }
 
-func activeShiftsForUser(userID string, now time.Time) []types.Shift {
-	var res []types.Shift
-	store := config.GetStore()
-	for _, sh := range store.Schedule {
+func activeShiftsForUser(userID string, now time.Time) []store.Shift {
+	var res []store.Shift
+	shifts := store.ListShifts()
+	for _, sh := range shifts {
 		start := time.Unix(sh.Start, 0)
 		end := time.Unix(sh.End, 0)
-		if (now.Equal(start) || (now.After(start) && now.Before(end))) && utils.Contains(sh.UserIDs, userID) {
+		if now.After(start) && now.Before(end) && slices.Contains(sh.UserIDs, userID) {
 			res = append(res, sh)
 		}
 	}
@@ -94,10 +82,10 @@ func ApplyShiftState(now time.Time) (string, []string) {
 	}
 	var applied []event
 
-	store := config.GetStore()
+	volunteers := store.ListVolunteers()
+	shifts := store.ListShifts()
 
-	// Main schedule loop
-	for _, sh := range store.Schedule {
+	for _, sh := range shifts {
 		start := time.Unix(sh.Start, 0)
 		end := time.Unix(sh.End, 0)
 
@@ -115,7 +103,7 @@ func ApplyShiftState(now time.Time) (string, []string) {
 				}
 			}
 
-			// Activation (active window)
+			// Activation (during shift)
 			if now.After(start.Add(-10*time.Second)) && now.Before(end) {
 				if !bot.HasRoleNow(uid) {
 					if err := bot.AddRole(uid); err != nil {
@@ -126,9 +114,9 @@ func ApplyShiftState(now time.Time) (string, []string) {
 				}
 			}
 
-			// Deactivation (after end)
+			// Deactivation (after shift)
 			if now.After(end) && !endedKey[ekey] {
-				if !utils.Contains(store.Volunteers, uid) && bot.HasRoleNow(uid) {
+				if bot.HasRoleNow(uid) {
 					if err := bot.RemoveRole(uid); err != nil {
 						errs = append(errs, "remove role "+uid+": "+err.Error())
 					} else {
@@ -136,23 +124,23 @@ func ApplyShiftState(now time.Time) (string, []string) {
 					}
 				}
 				endedKey[ekey] = true
+				_ = store.RemoveVolunteer(uid)  // remove served volunteer
+				_ = store.RemoveShift(sh.Start) // remove completed shift
 			}
 		}
 	}
 
-	// Reconciliation pass
 	guildMembers, err := bot.GetAllMembers(config.Cfg.GuildID)
 	if err == nil {
 		nowUnix := now.Unix()
 		var shouldHave []string
 
-		// Gather all active + volunteer IDs
-		for _, sh := range store.Schedule {
+		for _, sh := range shifts {
 			if nowUnix >= sh.Start && nowUnix <= sh.End {
 				shouldHave = append(shouldHave, sh.UserIDs...)
 			}
 		}
-		shouldHave = append(shouldHave, store.Volunteers...)
+		shouldHave = append(shouldHave, volunteers...)
 
 		for _, m := range guildMembers {
 			if slices.Contains(m.Roles, config.Cfg.RoleID) && !slices.Contains(shouldHave, m.User.ID) {
@@ -167,17 +155,11 @@ func ApplyShiftState(now time.Time) (string, []string) {
 		errs = append(errs, "failed to fetch guild members for reconciliation: "+err.Error())
 	}
 
-	// Generate summary
 	if len(applied) == 0 {
 		return "✅ No changes needed — everything is up to date.", errs
 	}
 
-	var (
-		added    []string
-		removed  []string
-		reminded []string
-	)
-
+	var reminded, added, removed []string
 	for _, a := range applied {
 		label := map[string]string{
 			"activated":         "🟢 Activated",
@@ -187,12 +169,12 @@ func ApplyShiftState(now time.Time) (string, []string) {
 		}[a.action]
 		entry := fmt.Sprintf("%s <@%s> (<t:%d:R>)", label, a.userID, a.when)
 		switch a.action {
+		case "reminded":
+			reminded = append(reminded, entry)
 		case "activated":
 			added = append(added, entry)
 		case "ended", "reconciled-remove":
 			removed = append(removed, entry)
-		case "reminded":
-			reminded = append(reminded, entry)
 		}
 	}
 
@@ -209,48 +191,4 @@ func ApplyShiftState(now time.Time) (string, []string) {
 	}
 
 	return b.String(), errs
-}
-
-func CurrentAndNextShift(now time.Time) (types.Shift, types.Shift) {
-	type parsed struct {
-		types.Shift
-		pStart time.Time
-	}
-	store := config.GetStore()
-	var parsedSh []parsed
-	for _, sh := range store.Schedule {
-		ps := time.Unix(sh.Start, 0)
-		pe := time.Unix(sh.End, 0)
-		if pe.Before(ps) {
-			continue
-		}
-		parsedSh = append(parsedSh, parsed{sh, ps})
-	}
-	sort.Slice(parsedSh, func(i, j int) bool { return parsedSh[i].pStart.Before(parsedSh[j].pStart) })
-
-	var cur types.Shift
-	var next types.Shift
-	foundCur := false
-	for _, p := range parsedSh {
-		ps := time.Unix(p.Start, 0)
-		pe := time.Unix(p.End, 0)
-		if (now.Equal(ps) || (now.After(ps) && now.Before(pe))) && !foundCur {
-			cur = p.Shift
-			foundCur = true
-		}
-		if ps.After(now) {
-			next = p.Shift
-			break
-		}
-	}
-
-	if !foundCur {
-		cur = types.Shift{}
-	}
-
-	if next.Start == 0 && next.End == 0 {
-		next = types.Shift{Start: 0, End: 0, UserIDs: nil}
-	}
-
-	return cur, next
 }
