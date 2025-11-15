@@ -3,7 +3,7 @@ let organizers = [];
 
 const el = (id) => document.getElementById(id);
 
-// Time helpers (backend stores local epoch seconds)
+// Time helpers
 const fmtDT = (unix) => {
   const d = new Date(unix * 1000);
   const pad = (n) => String(n).padStart(2, "0");
@@ -49,12 +49,10 @@ function render() {
   store.schedule.forEach((sh, i) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><input type="datetime-local" value="${fmtDT(
+      <td><input type="datetime" value="${fmtDT(
         sh.start,
       )}" data-k="start" /></td>
-      <td><input type="datetime-local" value="${fmtDT(
-        sh.end,
-      )}" data-k="end" /></td>
+      <td><input type="datetime" value="${fmtDT(sh.end)}" data-k="end" /></td>
       <td data-idx="${i}" class="user-cell"></td>
       <td>
         <button data-act="update">Save</button>
@@ -222,6 +220,7 @@ el("save").onclick = async () => {
         throw new Error("All shifts must have end>start.");
     }
     const body = { volunteers: store.volunteers, schedule };
+    console.log(body);
     await api("/api/schedule", { method: "POST", body: JSON.stringify(body) });
     msg("All changes saved.", true);
     await load();
