@@ -300,12 +300,12 @@
           </section>
 
           <section>
-            <h3>Volunteers</h3>
+            <h3>Unscheduled members</h3>
             <div id="vol-list"></div>
 
             <div style="margin-top: 10px; display: flex; gap: 8px">
               <select id="vol-add-select" style="flex: 1">
-                <option value="">+ Add volunteer</option>
+                <option value="">+ Add Member</option>
               </select>
               <button id="add-vol" class="primary">Add</button>
             </div>
@@ -527,7 +527,7 @@
           x.textContent = "×";
           x.onclick = async () => {
             await api(`/api/volunteers/${id}`, { method: "DELETE" });
-            msg("Volunteer removed", true);
+            msg("Member removed", true);
             await loadAll();
           };
 
@@ -536,7 +536,7 @@
         });
 
         const sel = document.getElementById("vol-add-select");
-        sel.innerHTML = '<option value="">+ Add volunteer</option>';
+        sel.innerHTML = '<option value="">+ Add Member</option>';
 
         organizers
           .filter((o) => !volunteers.includes(o.id))
@@ -692,7 +692,7 @@
           method: "POST",
           body: JSON.stringify({ user_id: id }),
         });
-        msg("Volunteer added", true);
+        msg("Member added", true);
         await loadAll();
       };
 
