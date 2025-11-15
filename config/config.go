@@ -21,7 +21,7 @@ func LoadConfig(path string) error {
 		return err
 	}
 	if Cfg.Token == "" || Cfg.GuildID == "" || Cfg.RoleID == "" || Cfg.DataFile == "" ||
-		Cfg.OrganizerRoleID == "" || Cfg.LogChannelID == "" {
+		Cfg.OrganizerRoleID == "" || Cfg.LogChannelID == "" || Cfg.AdminToken == "" {
 		return errors.New("missing required fields in config file")
 	}
 	if !filepath.IsAbs(Cfg.DataFile) {

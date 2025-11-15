@@ -33,13 +33,16 @@ func Start(ctx context.Context, addr string) {
 	mux.Handle("/", http.FileServer(http.Dir("server/ui")))
 
 	// API endpoints
-	mux.HandleFunc("/api/schedule", handleSchedule)
-	mux.HandleFunc("/api/shift/", handleShiftByIndex)
-	mux.HandleFunc("/api/shift", handleShiftCreate)
-	mux.HandleFunc("/api/volunteers", handleVolunteers)
-	mux.HandleFunc("/api/volunteers/", handleVolunteerByID)
-	mux.HandleFunc("/api/organizers", handleOrganizers)
+	mux.Handle("/api/schedule", requireAuth(http.HandlerFunc(handleSchedule)))
+	mux.Handle("/api/shift/", requireAuth(http.HandlerFunc(handleShiftByIndex)))
+	mux.Handle("/api/shift", requireAuth(http.HandlerFunc(handleShiftCreate)))
+	mux.Handle("/api/volunteers", requireAuth(http.HandlerFunc(handleVolunteers)))
+	mux.Handle("/api/volunteers/", requireAuth(http.HandlerFunc(handleVolunteerByID)))
+	mux.Handle("/api/organizers", requireAuth(http.HandlerFunc(handleOrganizers)))
 	mux.HandleFunc("/api/status", handleStatus)
+
+	mux.HandleFunc("/api/login", handleLogin)
+	mux.HandleFunc("/api/logout", handleLogout)
 
 	srv := &http.Server{
 		Addr:    addr,
@@ -261,6 +264,57 @@ func handleOrganizers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, users)
 }
 
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	var body struct{ Token string }
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	if body.Token != config.Cfg.AdminToken {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	sessionVal := randomToken()
+	signed := sign(sessionVal)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    signed,
+		Path:     "/",
+		Expires:  time.Now().Add(24 * time.Hour),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	csrfToken := randomToken()
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrf",
+		Value:    csrfToken,
+		Path:     "/",
+		Expires:  time.Now().Add(24 * time.Hour),
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:   "session",
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:   "csrf",
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
+}
+
 // Helpers
 
 func validateShift(s store.Shift) error {
@@ -297,6 +351,29 @@ func cors(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func requireAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check session cookie
+		c, err := r.Cookie("session")
+		if err != nil || !verifySigned(c.Value) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// CSRF protection for non-GET
+		if r.Method != http.MethodGet {
+			csrfHeader := r.Header.Get("X-CSRF-Token")
+			csrfCookie, err := r.Cookie("csrf")
+			if err != nil || csrfHeader == "" || csrfCookie.Value != csrfHeader {
+				http.Error(w, "csrf violation", http.StatusForbidden)
+				return
+			}
+		}
+
 		next.ServeHTTP(w, r)
 	})
 }

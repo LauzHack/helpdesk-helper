@@ -8,4 +8,5 @@ type Config struct {
 	OrganizerRoleID string `json:"organizer_role_id"`
 	LogChannelID    string `json:"log_channel_id"`
 	DataFile        string `json:"data_file"`
+	AdminToken      string `json:"admin_token"`
 }

@@ -3,257 +3,443 @@
   <head>
     <meta charset="utf-8" />
     <title>Helpdesk Schedule Manager</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
     <style>
       :root {
-        --gap: 12px;
-        --pad: 14px;
-        --radius: 10px;
+        --gap: 16px;
+        --pad: 18px;
+        --radius: 12px;
         --border: 1px solid #ddd;
-        --accent: #0066ff;
-        --accent-light: #e3f2fd;
-        --bg: #fafafa;
-        --danger: #d32f2f;
+        --bg: #f4f5f6;
+        --card-bg: #fff;
+        --accent: #1a73e8;
+        --accent-dark: #0c47a1;
+        --danger: #c62828;
         --ok: #2e7d32;
+        --shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
       }
+
       * {
         box-sizing: border-box;
-      }
-      body {
         font-family: system-ui, sans-serif;
-        background: var(--bg);
-        color: #222;
+      }
+
+      body {
         margin: 0;
-        padding: 24px;
-        max-width: 1100px;
-        margin-inline: auto;
+        background: var(--bg);
+        padding: 32px;
+        display: flex;
+        justify-content: center;
       }
-      h1 {
-        margin: 0 0 24px;
-        font-size: 1.6rem;
-      }
-      section h3 {
-        margin-top: 0;
-        border-bottom: var(--border);
-        padding-bottom: 6px;
-      }
+
+      /* Card */
       .card {
-        background: white;
-        border: var(--border);
-        border-radius: var(--radius);
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+        background: var(--card-bg);
         padding: var(--pad);
+        border-radius: var(--radius);
+        border: var(--border);
+        box-shadow: var(--shadow);
         margin-bottom: 20px;
       }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.95rem;
-      }
-      th,
-      td {
-        border-bottom: var(--border);
-        padding: 6px 8px;
-      }
-      th {
-        text-align: left;
-        background: #f7f7f7;
-      }
-      input,
-      select,
+
+      /* Buttons */
       button {
-        border: 1px solid #ccc;
-        border-radius: 6px;
-        padding: 6px 8px;
-        font: inherit;
-      }
-      input[type="datetime-local"] {
-        width: 180px;
-      }
-      button {
+        padding: 7px 12px;
+        border-radius: 8px;
         cursor: pointer;
-        transition:
-          0.2s background,
-          0.2s color;
+        border: 1px solid #bbb;
+        background: #eee;
+        transition: 0.15s;
+        user-select: none;
       }
       button.primary {
         background: var(--accent);
-        color: white;
+        color: #fff;
         border: none;
       }
       button.primary:hover {
-        background: #004de0;
+        background: var(--accent-dark);
       }
       button.danger {
         background: var(--danger);
-        color: white;
+        color: #fff;
         border: none;
       }
       button.danger:hover {
-        background: #b71c1c;
+        background: #a10d0d;
       }
-      button.secondary {
-        background: #f2f2f2;
+      button.icon {
+        padding: 4px 6px;
+        background: none;
+        border: none;
+        font-size: 1rem;
+        color: #555;
       }
-      button.secondary:hover {
-        background: #e0e0e0;
+      button.icon:hover {
+        color: var(--accent-dark);
       }
+
+      /* Inputs */
+      input,
+      select {
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        font-size: 0.95rem;
+      }
+      input:focus,
+      select:focus {
+        border-color: var(--accent);
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.18);
+      }
+
+      /* Toolbar */
       .toolbar {
         display: flex;
         justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 12px;
-      }
-      .toolbar > div {
-        display: flex;
-        gap: 8px;
         align-items: center;
+        margin-bottom: 18px;
+        gap: 12px;
       }
+
+      /* Chips */
       .chip {
+        background: #e9efff;
+        border-radius: 16px;
+        padding: 4px 10px;
+        margin: 4px;
         display: inline-flex;
         align-items: center;
-        background: var(--accent-light);
-        border-radius: 12px;
-        padding: 4px 8px;
-        margin: 2px;
-        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 0.85rem;
+        border: 1px solid #d2dcff;
       }
       .chip button {
-        margin-left: 4px;
-        background: transparent;
+        margin-left: 8px;
+        background: none;
         border: none;
-        color: #555;
+        cursor: pointer;
         font-weight: bold;
+        padding: 0 2px;
+        color: #333;
       }
       .chip button:hover {
         color: var(--danger);
       }
+
+      /* Table */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      thead th {
+        text-align: left;
+        padding: 6px 4px;
+        font-weight: 600;
+        color: #444;
+      }
+      tbody td {
+        padding: 6px 4px;
+      }
+      tbody tr:nth-child(even) {
+        background: #fafafa;
+      }
+      tbody tr:hover {
+        background: #eef3ff;
+        transition: background 0.15s ease;
+      }
+
+      /* Status Bar */
       #status-bar {
-        font-size: 0.95rem;
-        color: #333;
         display: flex;
-        justify-content: space-between;
+        gap: 24px;
+        font-size: 0.95rem;
+        padding: 12px 16px;
+        border-radius: var(--radius);
+        border: var(--border);
+        background: #fff;
+      }
+      #status-bar span label {
+        color: #666;
+        margin-right: 4px;
+        font-weight: 500;
+      }
+
+      /* Modal */
+      #modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(1px);
+        display: none;
         align-items: center;
+        justify-content: center;
+        z-index: 50;
+      }
+
+      #modal {
+        background: white;
+        padding: 24px 26px;
+        border-radius: 14px;
+        width: 420px;
+        max-width: 90%;
+        animation: slideFade 0.12s ease-out;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+      }
+
+      @keyframes slideFade {
+        from {
+          opacity: 0;
+          transform: translateY(-6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .modal-row {
+        margin-bottom: 14px;
+      }
+      .modal-row label {
+        display: block;
+        font-size: 0.9rem;
+        color: #555;
+        margin-bottom: 4px;
+      }
+
+      #modal-users {
+        display: flex;
         flex-wrap: wrap;
+        gap: 6px;
       }
-      .badge {
-        display: inline-block;
-        background: var(--accent);
-        color: white;
-        padding: 3px 7px;
-        border-radius: 8px;
-        font-size: 0.8em;
-        margin-left: 4px;
+
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
       }
+
+      /* Message bar */
       #msg {
-        transition: opacity 0.3s;
-        margin-top: 10px;
-        min-height: 1.2em;
+        margin-top: 16px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        display: inline-block;
       }
       #msg.ok {
-        color: var(--ok);
+        background: #e1f6e3;
+        color: #1e7b20;
       }
       #msg.error {
-        color: var(--danger);
+        background: #fde0e0;
+        color: #a10d0d;
       }
-      .fade {
-        opacity: 0.5;
-      }
-      @media (max-width: 850px) {
-        body {
-          padding: 12px;
-        }
-        input[type="datetime-local"] {
-          width: 100%;
-        }
-        table {
-          font-size: 0.85rem;
+
+      /* Mobile */
+      @media (max-width: 800px) {
+        #grid {
+          display: grid !important;
+          grid-template-columns: 1fr !important;
         }
       }
     </style>
   </head>
+
   <body>
-    <h1>Helpdesk Schedule Manager</h1>
-
-    <div class="card" id="status-bar">
-      <div>Loading status…</div>
-      <div><span class="muted">Updated just now</span></div>
+    <!-- LOGIN -->
+    <div id="login-screen" class="card">
+      <h2>Admin Login</h2>
+      <input id="login-token" type="password" placeholder="Admin token" />
+      <button id="login-btn" class="primary">Login</button>
+      <div
+        id="login-error"
+        style="color: #c62828; margin-top: 10px; min-height: 20px"
+      ></div>
     </div>
 
-    <div class="card">
-      <div class="toolbar">
-        <div>
-          <button id="reload" class="secondary">⟳ Reload</button>
-          <button id="export" class="secondary">⇩ Export</button>
-        </div>
-        <div>
-          <button id="add-shift" class="secondary">+ Add Shift</button>
-          <button id="save" class="primary">Save All</button>
-        </div>
-      </div>
+    <!-- APP -->
+    <div id="app" style="display: none; max-width: 1150px; width: 100%">
+      <h1>Helpdesk Schedule Manager</h1>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px">
-        <section>
-          <h3>Upcoming & Current Shifts</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Start</th>
-                <th>End</th>
-                <th>Users</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="shift-rows"></tbody>
-          </table>
-        </section>
+      <div class="card" id="status-bar">Loading…</div>
 
-        <section>
-          <h3>Volunteers Pool</h3>
-          <div id="vol-list"></div>
-          <div style="margin-top: 10px; display: flex; gap: 8px">
-            <input id="vol-id" placeholder="Discord user ID" />
-            <button id="add-vol" class="secondary">Add</button>
+      <div class="card">
+        <div class="toolbar">
+          <div>
+            <button id="reload">⟳ Reload</button>
+            <button id="export">⇩ Export</button>
           </div>
-        </section>
-      </div>
+          <div>
+            <button id="add-shift">+ Add Shift</button>
+            <button id="save" class="primary">Save All</button>
+            <button id="logout">Logout</button>
+          </div>
+        </div>
 
-      <div id="msg" class="muted"></div>
+        <div
+          id="grid"
+          style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px"
+        >
+          <section>
+            <h3>Shifts</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Users</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="shift-rows"></tbody>
+            </table>
+          </section>
+
+          <section>
+            <h3>Volunteers</h3>
+            <div id="vol-list"></div>
+
+            <div style="margin-top: 10px; display: flex; gap: 8px">
+              <select id="vol-add-select" style="flex: 1">
+                <option value="">+ Add volunteer</option>
+              </select>
+              <button id="add-vol" class="primary">Add</button>
+            </div>
+          </section>
+        </div>
+
+        <div id="msg"></div>
+      </div>
     </div>
 
+    <!-- MODAL -->
+    <div id="modal-overlay">
+      <div id="modal">
+        <h3 id="modal-title">Edit Shift</h3>
+
+        <div class="modal-row">
+          <label>Start</label>
+          <input type="datetime-local" id="modal-start" />
+        </div>
+
+        <div class="modal-row">
+          <label>End</label>
+          <input type="datetime-local" id="modal-end" />
+        </div>
+
+        <div
+          class="modal-row"
+          style="display: flex; flex-direction: column; gap: 8px"
+        >
+          <label>Users</label>
+          <div id="modal-users"></div>
+          <select id="modal-add-user">
+            <option value="">+ Add user</option>
+          </select>
+        </div>
+
+        <div class="modal-footer">
+          <button id="modal-delete" class="danger">Delete</button>
+          <button id="modal-cancel">Cancel</button>
+          <button id="modal-save" class="primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCRIPT (exact same logic as before, lightly cleaned) -->
     <script>
-      let shifts = [];
-      let volunteers = [];
-      let organizers = [];
-      const el = (id) => document.getElementById(id);
+      /* ---------------- AUTH ---------------- */
 
-      const fmtDT = (unix) => {
-        const d = new Date(unix * 1000);
-        const pad = (n) => String(n).padStart(2, "0");
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
-          d.getDate(),
-        )}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      };
-      const parseDT = (v) => Math.floor(new Date(v).getTime() / 1000);
+      function getCookie(name) {
+        return document.cookie
+          .split("; ")
+          .find((r) => r.startsWith(name + "="))
+          ?.split("=")[1];
+      }
 
-      const msg = (t, ok = false) => {
-        const e = el("msg");
-        e.textContent = t;
-        e.className = ok ? "ok" : "error";
-        setTimeout(() => (e.className = "muted fade"), 4000);
-      };
+      async function login() {
+        const token = document.getElementById("login-token").value.trim();
+        if (!token) return;
+
+        const r = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+
+        if (!r.ok) {
+          document.getElementById("login-error").textContent = "Invalid token.";
+          return;
+        }
+
+        showApp();
+        loadAll();
+      }
+
+      async function logout() {
+        await fetch("/api/logout", { method: "POST" });
+        showLogin();
+      }
+
+      document.getElementById("login-btn").onclick = login;
+      document.getElementById("logout").onclick = logout;
+
+      function showLogin() {
+        document.getElementById("app").style.display = "none";
+        document.getElementById("login-screen").style.display = "block";
+      }
+
+      function showApp() {
+        document.getElementById("login-screen").style.display = "none";
+        document.getElementById("app").style.display = "block";
+      }
+
+      /* ---------------- API ---------------- */
 
       async function api(path, opts = {}) {
+        const csrf = getCookie("csrf");
         const r = await fetch(path, {
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(opts.method && opts.method !== "GET"
+              ? { "X-CSRF-Token": csrf }
+              : {}),
+          },
           ...opts,
         });
+
         if (!r.ok) throw new Error(await r.text());
+
         return r.headers.get("content-type")?.includes("json")
           ? r.json()
           : r.text();
       }
+
+      /* ---------------- STATE ---------------- */
+
+      let shifts = [];
+      let volunteers = [];
+      let organizers = [];
+
+      const fmtDT = (unix) => {
+        const d = new Date(unix * 1000);
+        const p = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+      };
+      const parseDT = (v) => Math.floor(new Date(v).getTime() / 1000);
+
+      function msg(t, ok = false) {
+        const m = document.getElementById("msg");
+        m.textContent = t;
+        m.className = ok ? "ok" : "error";
+        setTimeout(() => (m.className = ""), 4000);
+      }
+
+      /* ---------------- LOAD ---------------- */
 
       async function loadAll() {
         try {
@@ -263,152 +449,254 @@
             api("/api/organizers"),
             api("/api/status").catch(() => null),
           ]);
+
           shifts = sh;
           volunteers = vols;
           organizers = orgs;
+
           renderStatus(st);
           render();
-          msg("✅ Data loaded", true);
-        } catch (e) {
-          msg("❌ Load failed: " + e.message, false);
+          msg("Data loaded", true);
+        } catch (err) {
+          msg("Load failed: " + err.message);
         }
       }
 
+      /* ---------------- RENDER ---------------- */
+
       function renderStatus(st) {
         const now = st ? new Date(st.now * 1000).toLocaleString() : "—";
-        const cur =
-          st && st.cur?.start
-            ? `${st.cur.user_ids.length} active`
-            : "none active";
-        const next =
-          st && st.next?.start
-            ? new Date(st.next.start * 1000).toLocaleTimeString()
-            : "none upcoming";
-        el("status-bar").innerHTML = `
-          <div>Now: <b>${now}</b> | Current: <b>${cur}</b> | Next: <b>${next}</b></div>
-          <div class="muted">Last updated: ${new Date().toLocaleTimeString()}</div>
+        const cur = st?.cur?.start
+          ? `${st.cur.user_ids.length} active`
+          : "none";
+        const next = st?.next?.start
+          ? new Date(st.next.start * 1000).toLocaleTimeString()
+          : "none";
+
+        document.getElementById("status-bar").innerHTML = `
+          <span><label>Now:</label>${now}</span>
+          <span><label>Current:</label>${cur}</span>
+          <span><label>Next:</label>${next}</span>
         `;
       }
 
       function render() {
-        const tbody = el("shift-rows");
+        renderShifts();
+        renderVolunteers();
+      }
+
+      function renderShifts() {
+        const tbody = document.getElementById("shift-rows");
         tbody.innerHTML = "";
+
         shifts.forEach((s, i) => {
           const tr = document.createElement("tr");
+
           tr.innerHTML = `
-            <td><input type="datetime-local" value="${fmtDT(s.start)}" data-k="start" /></td>
-            <td><input type="datetime-local" value="${fmtDT(s.end)}" data-k="end" /></td>
-            <td class="users"></td>
-            <td style="text-align:right">
-              <button data-act="update" class="secondary">Save</button>
-              <button data-act="delete" class="danger">×</button>
+            <td>${new Date(s.start * 1000).toLocaleString()}</td>
+            <td>${new Date(s.end * 1000).toLocaleString()}</td>
+            <td>${s.user_ids.length}</td>
+            <td style="text-align:right; white-space:nowrap;">
+              <button class="icon" data-edit>Edit</button>
+              <button class="icon" data-delete>Delete</button>
             </td>
           `;
-          tbody.appendChild(tr);
-          renderUsers(tr.querySelector(".users"), s.user_ids, i);
 
-          tr.querySelector('[data-act="update"]').onclick = async () => {
-            const start = parseDT(tr.querySelector('[data-k="start"]').value);
-            const end = parseDT(tr.querySelector('[data-k="end"]').value);
-            const users = shifts[i].user_ids;
-            if (end <= start) return msg("End must be after start.");
-            await api(`/api/shift/${i}`, {
-              method: "PUT",
-              body: JSON.stringify({ start, end, user_ids: users }),
-            });
-            msg("Shift saved.", true);
-          };
-
-          tr.querySelector('[data-act="delete"]').onclick = async () => {
+          tr.querySelector("[data-edit]").onclick = () => openModal(i);
+          tr.querySelector("[data-delete]").onclick = async () => {
             if (!confirm("Delete this shift?")) return;
             await api(`/api/shift/${i}`, { method: "DELETE" });
-            msg("Shift removed.", true);
+            msg("Shift deleted", true);
             await loadAll();
           };
-        });
 
-        // Volunteers
-        const v = el("vol-list");
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderVolunteers() {
+        const v = document.getElementById("vol-list");
         v.innerHTML = "";
+
         volunteers.forEach((id) => {
           const chip = document.createElement("span");
           chip.className = "chip";
-          const name = organizers.find((o) => o.id === id)?.name || id;
-          chip.textContent = name;
+          chip.textContent = organizers.find((o) => o.id === id)?.name || id;
+
           const x = document.createElement("button");
           x.textContent = "×";
           x.onclick = async () => {
             await api(`/api/volunteers/${id}`, { method: "DELETE" });
-            msg("Volunteer removed.", true);
+            msg("Volunteer removed", true);
             await loadAll();
           };
+
           chip.appendChild(x);
           v.appendChild(chip);
         });
-      }
 
-      function renderUsers(cell, ids, shiftIdx) {
-        cell.innerHTML = "";
-        ids.forEach((uid) => {
-          const chip = document.createElement("span");
-          chip.className = "chip";
-          chip.textContent = organizers.find((o) => o.id === uid)?.name || uid;
-          const x = document.createElement("button");
-          x.textContent = "×";
-          x.onclick = () => {
-            shifts[shiftIdx].user_ids = ids.filter((u) => u !== uid);
-            renderUsers(cell, shifts[shiftIdx].user_ids, shiftIdx);
-          };
-          chip.appendChild(x);
-          cell.appendChild(chip);
-        });
+        const sel = document.getElementById("vol-add-select");
+        sel.innerHTML = '<option value="">+ Add volunteer</option>';
 
-        const sel = document.createElement("select");
-        const base = document.createElement("option");
-        base.textContent = "+ Add";
-        base.value = "";
-        sel.appendChild(base);
         organizers
-          .filter((o) => !ids.includes(o.id))
+          .filter((o) => !volunteers.includes(o.id))
           .forEach((o) => {
             const opt = document.createElement("option");
             opt.value = o.id;
             opt.textContent = o.name;
             sel.appendChild(opt);
           });
-        sel.onchange = () => {
-          if (!sel.value) return;
-          shifts[shiftIdx].user_ids.push(sel.value);
-          renderUsers(cell, shifts[shiftIdx].user_ids, shiftIdx);
-        };
-        cell.appendChild(sel);
       }
 
-      // Controls
-      el("reload").onclick = loadAll;
-      el("add-shift").onclick = async () => {
-        const now = Math.floor(Date.now() / 1000);
-        const s = now + 3600;
-        const e = s + 7200;
-        await api("/api/shift", {
-          method: "POST",
-          body: JSON.stringify({ start: s, end: e, user_ids: [] }),
+      /* ---------------- MODAL ---------------- */
+
+      let modalIndex = null;
+
+      const overlay = document.getElementById("modal-overlay");
+      const modalStart = document.getElementById("modal-start");
+      const modalEnd = document.getElementById("modal-end");
+      const modalUsers = document.getElementById("modal-users");
+      const modalAddUser = document.getElementById("modal-add-user");
+      const modalTitle = document.getElementById("modal-title");
+
+      document.getElementById("add-shift").onclick = () => {
+        modalIndex = -1;
+        modalTitle.textContent = "Add Shift";
+        modalStart.value = fmtDT(Math.floor(Date.now() / 1000) + 3600);
+        modalEnd.value = fmtDT(Math.floor(Date.now() / 1000) + 10800);
+        modalUsers.innerHTML = "";
+        modalAddUser.innerHTML = '<option value="">+ Add user</option>';
+
+        organizers.forEach((o) => {
+          const opt = document.createElement("option");
+          opt.value = o.id;
+          opt.textContent = o.name;
+          modalAddUser.appendChild(opt);
         });
-        msg("Shift added.", true);
+
+        overlay.style.display = "flex";
+      };
+
+      function openModal(i) {
+        modalIndex = i;
+        const s = shifts[i];
+        modalTitle.textContent = "Edit Shift";
+
+        modalStart.value = fmtDT(s.start);
+        modalEnd.value = fmtDT(s.end);
+
+        modalUsers.innerHTML = "";
+        s.user_ids.forEach((uid) => {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = organizers.find((o) => o.id === uid)?.name || uid;
+
+          const x = document.createElement("button");
+          x.textContent = "×";
+          x.onclick = () => {
+            shifts[i].user_ids = s.user_ids.filter((u) => u !== uid);
+            openModal(i);
+          };
+
+          chip.appendChild(x);
+          modalUsers.appendChild(chip);
+        });
+
+        modalAddUser.innerHTML = '<option value="">+ Add user</option>';
+        organizers
+          .filter((o) => !s.user_ids.includes(o.id))
+          .forEach((o) => {
+            const opt = document.createElement("option");
+            opt.value = o.id;
+            opt.textContent = o.name;
+            modalAddUser.appendChild(opt);
+          });
+
+        modalAddUser.onchange = () => {
+          if (!modalAddUser.value) return;
+          shifts[i].user_ids.push(modalAddUser.value);
+          openModal(i);
+        };
+
+        overlay.style.display = "flex";
+      }
+
+      function closeModal() {
+        overlay.style.display = "none";
+        modalIndex = null;
+      }
+
+      document.getElementById("modal-cancel").onclick = closeModal;
+      overlay.onclick = (e) => {
+        if (e.target === overlay) closeModal();
+      };
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModal();
+      });
+
+      document.getElementById("modal-save").onclick = async () => {
+        const start = parseDT(modalStart.value);
+        const end = parseDT(modalEnd.value);
+        if (end <= start) return msg("End must be after start");
+
+        if (modalIndex === -1) {
+          await api("/api/shift", {
+            method: "POST",
+            body: JSON.stringify({ start, end, user_ids: [] }),
+          });
+          msg("Shift created", true);
+        } else {
+          await api(`/api/shift/${modalIndex}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              start,
+              end,
+              user_ids: shifts[modalIndex].user_ids,
+            }),
+          });
+          msg("Shift updated", true);
+        }
+
+        closeModal();
         await loadAll();
       };
-      el("add-vol").onclick = async () => {
-        const id = el("vol-id").value.trim();
+
+      document.getElementById("modal-delete").onclick = async () => {
+        if (modalIndex === -1) return closeModal();
+        if (!confirm("Delete shift?")) return;
+
+        await api(`/api/shift/${modalIndex}`, { method: "DELETE" });
+        msg("Shift removed", true);
+        closeModal();
+        await loadAll();
+      };
+
+      /* ---------------- CONTROLS ---------------- */
+
+      document.getElementById("reload").onclick = loadAll;
+
+      document.getElementById("save").onclick = async () => {
+        await api("/api/schedule", {
+          method: "POST",
+          body: JSON.stringify(shifts),
+        });
+        msg("All changes saved", true);
+        await loadAll();
+      };
+
+      document.getElementById("add-vol").onclick = async () => {
+        const id = document.getElementById("vol-add-select").value;
         if (!id) return;
+
         await api("/api/volunteers", {
           method: "POST",
           body: JSON.stringify({ user_id: id }),
         });
-        el("vol-id").value = "";
-        msg("Volunteer added.", true);
+        msg("Volunteer added", true);
         await loadAll();
       };
-      el("export").onclick = () => {
+
+      document.getElementById("export").onclick = () => {
         const blob = new Blob(
           [JSON.stringify({ volunteers, schedule: shifts }, null, 2)],
           { type: "application/json" },
@@ -418,16 +706,19 @@
         a.download = "helpdesk-store.json";
         a.click();
       };
-      el("save").onclick = async () => {
-        await api("/api/schedule", {
-          method: "POST",
-          body: JSON.stringify(shifts),
-        });
-        msg("All changes saved.", true);
-        await loadAll();
-      };
 
-      loadAll();
+      /* INIT */
+      (async () => {
+        try {
+          const r = await fetch("/api/status");
+          if (r.ok) {
+            showApp();
+            await loadAll();
+            return;
+          }
+        } catch {}
+        showLogin();
+      })();
     </script>
   </body>
 </html>
