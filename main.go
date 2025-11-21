@@ -90,6 +90,7 @@ func registerCommands(dg *discordgo.Session, guildID string) error {
 				{Name: "join", Description: "Join helpdesk", Type: discordgo.ApplicationCommandOptionSubCommand},
 				{Name: "leave", Description: "Leave helpdesk", Type: discordgo.ApplicationCommandOptionSubCommand},
 				{Name: "list", Description: "Show current and next shifts", Type: discordgo.ApplicationCommandOptionSubCommand},
+				{Name: "myschedule", Description: "Show your personal schedule", Type: discordgo.ApplicationCommandOptionSubCommand},
 			},
 		},
 		{
