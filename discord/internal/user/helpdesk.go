@@ -3,6 +3,8 @@ package user
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"time"
 
 	"lauzhack-bot/discord/context"
@@ -26,6 +28,8 @@ func HandleHelpdeskCommand(ctx *context.CommandContext, ic *discordgo.Interactio
 		handleLeave(ctx, ic)
 	case "list":
 		handleList(ctx, ic)
+	case "myschedule":
+		handleMySchedule(ctx, ic)
 	default:
 		ctx.Reply(ic, "Unknown subcommand.")
 	}
@@ -75,8 +79,11 @@ func handleLeave(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 // /helpdesk list
 func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 	now := time.Now()
-	cur, next := store.CurrentAndNextShift(now)
+	cur, _ := store.CurrentAndNextShift(now)
 	volunteers := store.ListVolunteers()
+
+	all := store.ListShifts()
+	sort.Slice(all, func(i, j int) bool { return all[i].Start < all[j].Start })
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "Helpdesk Schedule",
@@ -100,13 +107,28 @@ func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 		})
 	}
 
-	// Next shift
-	if next.Start != 0 {
+	// Upcoming shifts
+	var upcoming []*store.Shift
+	for i := range all {
+		if all[i].Start > now.Unix() {
+			upcoming = append(upcoming, &all[i])
+		}
+	}
+
+	if len(upcoming) == 0 {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Next",
-			Value:  fmt.Sprintf("%s\n<t:%d:R> → <t:%d:R>", utils.MentionUsers(next.UserIDs), next.Start, next.End),
+			Name:   "Upcoming Shifts",
+			Value:  "(none scheduled)",
 			Inline: false,
 		})
+	} else {
+		for _, s := range upcoming {
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+				Name:   fmt.Sprintf("Shift at <t:%d:F>", s.Start),
+				Value:  fmt.Sprintf("%s\n<t:%d:R> -> <t:%d:R>", utils.MentionUsers(s.UserIDs), s.Start, s.End),
+				Inline: false,
+			})
+		}
 	}
 
 	// Volunteers list
@@ -133,5 +155,91 @@ func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 		},
 	}); err != nil {
 		ctx.Reply(ic, fmt.Sprintf("Failed to send list: %v", err))
+	}
+}
+
+func handleMySchedule(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
+	userID := ic.Member.User.ID
+	now := time.Now().Unix()
+
+	all := store.ListShifts()
+
+	var current, upcoming []store.Shift
+
+	var mine []store.Shift
+	for _, s := range all {
+		if slices.Contains(s.UserIDs, userID) {
+			mine = append(mine, s)
+		}
+	}
+
+	sort.Slice(mine, func(i, j int) bool { return mine[i].Start < mine[j].Start })
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "Your Helpdesk Shifts",
+		Color:       0x00ff88,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Description: fmt.Sprintf("<@%s>'s assigned schedule", userID),
+	}
+
+	// No shifts
+	if len(mine) == 0 {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   "Shifts",
+			Value:  "(you have no assigned shifts)",
+			Inline: false,
+		})
+		goto send
+	}
+
+	// Field blocks
+
+	for _, s := range mine {
+		if s.Start <= now && s.End >= now {
+			current = append(current, s)
+		} else {
+			upcoming = append(upcoming, s)
+		}
+	}
+
+	// Current (highlighted)
+	if len(current) > 0 {
+		for _, s := range current {
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+				Name: "**Now**",
+				Value: fmt.Sprintf(
+					"%s\n<t:%d:R> → <t:%d:R>",
+					utils.MentionUsers(s.UserIDs),
+					s.Start, s.End,
+				),
+				Inline: false,
+			})
+		}
+	}
+
+	// upcoming
+	if len(upcoming) > 0 {
+		for _, s := range upcoming {
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+				Name: fmt.Sprintf("Upcoming — <t:%d:F>", s.Start),
+				Value: fmt.Sprintf(
+					"%s\n<t:%d:R> → <t:%d:R>",
+					utils.MentionUsers(s.UserIDs),
+					s.Start, s.End,
+				),
+				Inline: false,
+			})
+		}
+	}
+
+send:
+	if err := ctx.Session.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Flags:  1 << 6, // ephemeral
+		},
+	}); err != nil {
+		ctx.Reply(ic, fmt.Sprintf("Failed to send schedule: %v", err))
 	}
 }
