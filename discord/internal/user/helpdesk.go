@@ -128,20 +128,39 @@ func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 		})
 	} else {
 		var b strings.Builder
+		chunkIndex := 1
+
+		addChunk := func() {
+			if b.Len() == 0 {
+				return
+			}
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+				Name:   fmt.Sprintf("Upcoming Shifts (part %d)", chunkIndex),
+				Value:  b.String(),
+				Inline: false,
+			})
+			chunkIndex++
+			b.Reset()
+		}
+
 		for _, s := range upcoming {
-			fmt.Fprintf(&b,
+			line := fmt.Sprintf(
 				"• <t:%d:F> — %s\n  <t:%d:R> → <t:%d:R>\n",
 				s.Start,
 				utils.MentionUsers(s.UserIDs),
 				s.Start, s.End,
 			)
+
+			// If adding this line exceeds 1024, flush the chunk
+			if b.Len()+len(line) > 1024 {
+				addChunk()
+			}
+
+			b.WriteString(line)
 		}
 
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Upcoming Shifts",
-			Value:  b.String(),
-			Inline: false,
-		})
+		// flush last chunk
+		addChunk()
 	}
 
 	// Volunteers list
