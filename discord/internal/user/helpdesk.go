@@ -96,8 +96,12 @@ func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 	// Current shift
 	if cur.Start != 0 {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Now",
-			Value:  fmt.Sprintf("%s\n<t:%d:R> → <t:%d:R>", utils.MentionUsers(cur.UserIDs), cur.Start, cur.End),
+			Name: "Now",
+			Value: fmt.Sprintf(
+				"%s\n<t:%d:R> → <t:%d:R>",
+				utils.MentionUsers(cur.UserIDs),
+				cur.Start, cur.End,
+			),
 			Inline: false,
 		})
 	} else {
@@ -109,10 +113,10 @@ func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 	}
 
 	// Upcoming shifts
-	var upcoming []*store.Shift
-	for i := range all {
-		if all[i].Start > now.Unix() {
-			upcoming = append(upcoming, &all[i])
+	var upcoming []store.Shift
+	for _, s := range all {
+		if s.Start > now.Unix() {
+			upcoming = append(upcoming, s)
 		}
 	}
 
@@ -132,19 +136,12 @@ func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 				s.Start, s.End,
 			)
 		}
+
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   "Upcoming Shifts",
 			Value:  b.String(),
 			Inline: false,
 		})
-
-		for _, s := range upcoming {
-			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-				Name:   fmt.Sprintf("Shift at <t:%d:F>", s.Start),
-				Value:  fmt.Sprintf("%s\n<t:%d:R> -> <t:%d:R>", utils.MentionUsers(s.UserIDs), s.Start, s.End),
-				Inline: false,
-			})
-		}
 	}
 
 	// Volunteers list
