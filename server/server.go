@@ -39,6 +39,7 @@ func Start(ctx context.Context, addr string) {
 	mux.Handle("/api/volunteers", requireAuth(http.HandlerFunc(handleVolunteers)))
 	mux.Handle("/api/volunteers/", requireAuth(http.HandlerFunc(handleVolunteerByID)))
 	mux.Handle("/api/organizers", requireAuth(http.HandlerFunc(handleOrganizers)))
+	mux.Handle("/api/user/", requireAuth(http.HandlerFunc(handleUserShifts)))
 	mux.HandleFunc("/api/status", handleStatus)
 
 	mux.HandleFunc("/api/login", handleLogin)
@@ -313,6 +314,73 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 		MaxAge: -1,
 	})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
+}
+
+func handleUserShifts(w http.ResponseWriter, r *http.Request) {
+	userID := path.Base(r.URL.Path)
+	if strings.TrimSpace(userID) == "" {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+
+	// GET /api/user/{id}/shifts
+	case http.MethodGet:
+		shifts := store.ListShifts()
+		var out []store.Shift
+		for _, s := range shifts {
+			if slices.Contains(s.UserIDs, userID) {
+				out = append(out, s)
+			}
+		}
+		writeJSON(w, http.StatusOK, out)
+
+	// PUT /api/user/{id}/shifts
+	case http.MethodPut:
+		var newShifts []store.Shift
+		if err := json.NewDecoder(r.Body).Decode(&newShifts); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+
+		// Validate ALL shifts
+		for _, s := range newShifts {
+			if err := validateShift(s); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			// ensure user belongs to each shift
+			if !slices.Contains(s.UserIDs, userID) {
+				http.Error(w, "user must be present in every shift", http.StatusBadRequest)
+				return
+			}
+		}
+
+		// Replace only this user’s shifts:
+		// 1. load full schedule
+		// 2. remove all shifts where userID appears
+		// 3. append newShifts
+		all := store.ListShifts()
+		var out []store.Shift
+		for _, s := range all {
+			keep := true
+			if slices.Contains(s.UserIDs, userID) {
+				keep = false
+			}
+			if keep {
+				out = append(out, s)
+			}
+		}
+		out = append(out, newShifts...)
+
+		store.ReplaceAllShifts(out)
+
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // Helpers

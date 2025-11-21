@@ -239,10 +239,16 @@
         color: #a10d0d;
       }
 
+      /* Grid */
+      #grid {
+        display: grid;
+        grid-template-columns: 1.3fr 1fr 1.3fr;
+        gap: 22px;
+      }
+
       /* Mobile */
       @media (max-width: 800px) {
         #grid {
-          display: grid !important;
           grid-template-columns: 1fr !important;
         }
       }
@@ -280,10 +286,8 @@
           </div>
         </div>
 
-        <div
-          id="grid"
-          style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px"
-        >
+        <div id="grid">
+          <!-- Global shifts -->
           <section>
             <h3>Shifts</h3>
             <table>
@@ -299,6 +303,7 @@
             </table>
           </section>
 
+          <!-- Unscheduled members -->
           <section>
             <h3>Unscheduled members</h3>
             <div id="vol-list"></div>
@@ -309,6 +314,41 @@
               </select>
               <button id="add-vol" class="primary">Add</button>
             </div>
+          </section>
+
+          <!-- User-centric shift editor -->
+          <section>
+            <h3>Shifts per user</h3>
+            <div
+              style="
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                margin-bottom: 8px;
+              "
+            >
+              <select id="user-select" style="flex: 1">
+                <option value="">Select member</option>
+              </select>
+              <button id="user-add-shift">+ Add shift</button>
+            </div>
+            <div
+              id="user-meta"
+              style="font-size: 0.85rem; color: #555; margin-bottom: 6px"
+            >
+              Select a member to see their shifts.
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Total users</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="user-shift-rows"></tbody>
+            </table>
           </section>
         </div>
 
@@ -350,7 +390,6 @@
       </div>
     </div>
 
-    <!-- SCRIPT (exact same logic as before, lightly cleaned) -->
     <script>
       /* ---------------- AUTH ---------------- */
 
@@ -425,10 +464,20 @@
       let volunteers = [];
       let organizers = [];
 
+      let selectedUserId = "";
+
+      // Modal state
+      let modalIndex = null; // index in shifts or null/-1
+      let modalContext = "global"; // "global" | "user"
+      let modalUserIds = [];
+      let modalContextUserId = null;
+
       const fmtDT = (unix) => {
         const d = new Date(unix * 1000);
         const p = (n) => String(n).padStart(2, "0");
-        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(
+          d.getDate(),
+        )}T${p(d.getHours())}:${p(d.getMinutes())}`;
       };
       const parseDT = (v) => Math.floor(new Date(v).getTime() / 1000);
 
@@ -483,6 +532,7 @@
       function render() {
         renderShifts();
         renderVolunteers();
+        renderUserPanel();
       }
 
       function renderShifts() {
@@ -502,7 +552,8 @@
             </td>
           `;
 
-          tr.querySelector("[data-edit]").onclick = () => openModal(i);
+          tr.querySelector("[data-edit]").onclick = () =>
+            openModal(i, "global");
           tr.querySelector("[data-delete]").onclick = async () => {
             if (!confirm("Delete this shift?")) return;
             await api(`/api/shift/${i}`, { method: "DELETE" });
@@ -548,9 +599,107 @@
           });
       }
 
-      /* ---------------- MODAL ---------------- */
+      function renderUserPanel() {
+        const sel = document.getElementById("user-select");
+        const meta = document.getElementById("user-meta");
+        const tbody = document.getElementById("user-shift-rows");
 
-      let modalIndex = null;
+        const prev = selectedUserId || sel.value || "";
+        sel.innerHTML = '<option value="">Select member</option>';
+
+        organizers.forEach((o) => {
+          const opt = document.createElement("option");
+          opt.value = o.id;
+          opt.textContent = o.name;
+          sel.appendChild(opt);
+        });
+
+        if (organizers.some((o) => o.id === prev)) {
+          sel.value = prev;
+          selectedUserId = prev;
+        } else {
+          selectedUserId = "";
+          sel.value = "";
+        }
+
+        tbody.innerHTML = "";
+
+        if (!selectedUserId) {
+          meta.textContent = "Select a member to see their shifts.";
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 4;
+          td.style.color = "#777";
+          td.textContent = "No user selected.";
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          return;
+        }
+
+        const name =
+          organizers.find((o) => o.id === selectedUserId)?.name ||
+          selectedUserId;
+
+        const list = [];
+        shifts.forEach((s, idx) => {
+          if (s.user_ids.includes(selectedUserId)) {
+            list.push({ ...s, __index: idx });
+          }
+        });
+
+        list.sort((a, b) => a.start - b.start);
+
+        meta.textContent = `${name} has ${list.length} shift${
+          list.length === 1 ? "" : "s"
+        }.`;
+
+        if (list.length === 0) {
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 4;
+          td.style.color = "#777";
+          td.textContent = "No shifts yet.";
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          return;
+        }
+
+        list.forEach((item) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${new Date(item.start * 1000).toLocaleString()}</td>
+            <td>${new Date(item.end * 1000).toLocaleString()}</td>
+            <td>${item.user_ids.length}</td>
+            <td style="text-align:right; white-space:nowrap;">
+              <button class="icon" data-edit>Edit</button>
+              <button class="icon" data-remove>– Remove</button>
+            </td>
+          `;
+
+          tr.querySelector("[data-edit]").onclick = () =>
+            openModal(item.__index, "user");
+
+          tr.querySelector("[data-remove]").onclick = async () => {
+            if (!confirm("Remove this user from this shift?")) return;
+            const s = { ...shifts[item.__index] };
+            s.user_ids = s.user_ids.filter((u) => u !== selectedUserId);
+            try {
+              await api(`/api/shift/${item.__index}`, {
+                method: "PUT",
+                body: JSON.stringify(s),
+              });
+              msg("User removed from shift", true);
+              await loadAll();
+            } catch (err) {
+              msg("Update failed: " + err.message);
+            }
+          };
+
+          tbody.appendChild(tr);
+        });
+      }
+
+      /* ---------------- MODAL ---------------- */
 
       const overlay = document.getElementById("modal-overlay");
       const modalStart = document.getElementById("modal-start");
@@ -559,34 +708,11 @@
       const modalAddUser = document.getElementById("modal-add-user");
       const modalTitle = document.getElementById("modal-title");
 
-      document.getElementById("add-shift").onclick = () => {
-        modalIndex = -1;
-        modalTitle.textContent = "Add Shift";
-        modalStart.value = fmtDT(Math.floor(Date.now() / 1000) + 3600);
-        modalEnd.value = fmtDT(Math.floor(Date.now() / 1000) + 10800);
+      function renderModalUsers() {
         modalUsers.innerHTML = "";
         modalAddUser.innerHTML = '<option value="">+ Add user</option>';
 
-        organizers.forEach((o) => {
-          const opt = document.createElement("option");
-          opt.value = o.id;
-          opt.textContent = o.name;
-          modalAddUser.appendChild(opt);
-        });
-
-        overlay.style.display = "flex";
-      };
-
-      function openModal(i) {
-        modalIndex = i;
-        const s = shifts[i];
-        modalTitle.textContent = "Edit Shift";
-
-        modalStart.value = fmtDT(s.start);
-        modalEnd.value = fmtDT(s.end);
-
-        modalUsers.innerHTML = "";
-        s.user_ids.forEach((uid) => {
+        modalUserIds.forEach((uid) => {
           const chip = document.createElement("span");
           chip.className = "chip";
           chip.textContent = organizers.find((o) => o.id === uid)?.name || uid;
@@ -594,17 +720,16 @@
           const x = document.createElement("button");
           x.textContent = "×";
           x.onclick = () => {
-            shifts[i].user_ids = s.user_ids.filter((u) => u !== uid);
-            openModal(i);
+            modalUserIds = modalUserIds.filter((u) => u !== uid);
+            renderModalUsers();
           };
 
           chip.appendChild(x);
           modalUsers.appendChild(chip);
         });
 
-        modalAddUser.innerHTML = '<option value="">+ Add user</option>';
         organizers
-          .filter((o) => !s.user_ids.includes(o.id))
+          .filter((o) => !modalUserIds.includes(o.id))
           .forEach((o) => {
             const opt = document.createElement("option");
             opt.value = o.id;
@@ -614,16 +739,67 @@
 
         modalAddUser.onchange = () => {
           if (!modalAddUser.value) return;
-          shifts[i].user_ids.push(modalAddUser.value);
-          openModal(i);
+          if (!modalUserIds.includes(modalAddUser.value)) {
+            modalUserIds.push(modalAddUser.value);
+            renderModalUsers();
+          }
         };
+      }
 
+      function openModal(i, context) {
+        modalContext = context || "global";
+        modalIndex = i;
+        modalContextUserId =
+          modalContext === "user" ? selectedUserId || null : null;
+
+        const s = shifts[i];
+        const labelUser =
+          modalContext === "user" && modalContextUserId
+            ? ` (${
+                organizers.find((o) => o.id === modalContextUserId)?.name ||
+                modalContextUserId
+              })`
+            : "";
+
+        modalTitle.textContent = "Edit Shift" + labelUser;
+        modalStart.value = fmtDT(s.start);
+        modalEnd.value = fmtDT(s.end);
+        modalUserIds = [...s.user_ids];
+        renderModalUsers();
+
+        overlay.style.display = "flex";
+      }
+
+      function openNewShift(context, userId) {
+        modalContext = context || "global";
+        modalIndex = -1;
+        modalContextUserId = modalContext === "user" ? userId || null : null;
+
+        const nowSec = Math.floor(Date.now() / 1000);
+        modalStart.value = fmtDT(nowSec + 3600);
+        modalEnd.value = fmtDT(nowSec + 10800);
+
+        if (modalContext === "user" && modalContextUserId) {
+          modalTitle.textContent = `Add Shift for ${
+            organizers.find((o) => o.id === modalContextUserId)?.name ||
+            modalContextUserId
+          }`;
+          modalUserIds = [modalContextUserId];
+        } else {
+          modalTitle.textContent = "Add Shift";
+          modalUserIds = [];
+        }
+
+        renderModalUsers();
         overlay.style.display = "flex";
       }
 
       function closeModal() {
         overlay.style.display = "none";
         modalIndex = null;
+        modalContext = "global";
+        modalContextUserId = null;
+        modalUserIds = [];
       }
 
       document.getElementById("modal-cancel").onclick = closeModal;
@@ -637,38 +813,50 @@
       document.getElementById("modal-save").onclick = async () => {
         const start = parseDT(modalStart.value);
         const end = parseDT(modalEnd.value);
+
+        if (isNaN(start) || isNaN(end)) return msg("Start/end invalid");
         if (end <= start) return msg("End must be after start");
 
-        if (modalIndex === -1) {
-          await api("/api/shift", {
-            method: "POST",
-            body: JSON.stringify({ start, end, user_ids: [] }),
-          });
-          msg("Shift created", true);
-        } else {
-          await api(`/api/shift/${modalIndex}`, {
-            method: "PUT",
-            body: JSON.stringify({
-              start,
-              end,
-              user_ids: shifts[modalIndex].user_ids,
-            }),
-          });
-          msg("Shift updated", true);
-        }
+        const payload = {
+          start,
+          end,
+          user_ids: modalUserIds.slice(),
+        };
 
-        closeModal();
-        await loadAll();
+        try {
+          if (modalIndex === -1) {
+            await api("/api/shift", {
+              method: "POST",
+              body: JSON.stringify(payload),
+            });
+            msg("Shift created", true);
+          } else {
+            await api(`/api/shift/${modalIndex}`, {
+              method: "PUT",
+              body: JSON.stringify(payload),
+            });
+            msg("Shift updated", true);
+          }
+
+          closeModal();
+          await loadAll();
+        } catch (err) {
+          msg("Save failed: " + err.message);
+        }
       };
 
       document.getElementById("modal-delete").onclick = async () => {
-        if (modalIndex === -1) return closeModal();
+        if (modalIndex === -1 || modalIndex == null) return closeModal();
         if (!confirm("Delete shift?")) return;
 
-        await api(`/api/shift/${modalIndex}`, { method: "DELETE" });
-        msg("Shift removed", true);
-        closeModal();
-        await loadAll();
+        try {
+          await api(`/api/shift/${modalIndex}`, { method: "DELETE" });
+          msg("Shift removed", true);
+          closeModal();
+          await loadAll();
+        } catch (err) {
+          msg("Delete failed: " + err.message);
+        }
       };
 
       /* ---------------- CONTROLS ---------------- */
@@ -676,24 +864,32 @@
       document.getElementById("reload").onclick = loadAll;
 
       document.getElementById("save").onclick = async () => {
-        await api("/api/schedule", {
-          method: "POST",
-          body: JSON.stringify(shifts),
-        });
-        msg("All changes saved", true);
-        await loadAll();
+        try {
+          await api("/api/schedule", {
+            method: "POST",
+            body: JSON.stringify(shifts),
+          });
+          msg("All changes saved", true);
+          await loadAll();
+        } catch (err) {
+          msg("Save failed: " + err.message);
+        }
       };
 
       document.getElementById("add-vol").onclick = async () => {
         const id = document.getElementById("vol-add-select").value;
         if (!id) return;
 
-        await api("/api/volunteers", {
-          method: "POST",
-          body: JSON.stringify({ user_id: id }),
-        });
-        msg("Member added", true);
-        await loadAll();
+        try {
+          await api("/api/volunteers", {
+            method: "POST",
+            body: JSON.stringify({ user_id: id }),
+          });
+          msg("Member added", true);
+          await loadAll();
+        } catch (err) {
+          msg("Add failed: " + err.message);
+        }
       };
 
       document.getElementById("export").onclick = () => {
@@ -705,6 +901,22 @@
         a.href = URL.createObjectURL(blob);
         a.download = "helpdesk-store.json";
         a.click();
+      };
+
+      document.getElementById("add-shift").onclick = () =>
+        openNewShift("global", null);
+
+      document.getElementById("user-add-shift").onclick = () => {
+        if (!selectedUserId) {
+          msg("Select a member first");
+          return;
+        }
+        openNewShift("user", selectedUserId);
+      };
+
+      document.getElementById("user-select").onchange = (e) => {
+        selectedUserId = e.target.value || "";
+        renderUserPanel();
       };
 
       /* INIT */
