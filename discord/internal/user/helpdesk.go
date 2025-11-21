@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"lauzhack-bot/discord/context"
@@ -122,6 +123,21 @@ func handleList(ctx *context.CommandContext, ic *discordgo.InteractionCreate) {
 			Inline: false,
 		})
 	} else {
+		var b strings.Builder
+		for _, s := range upcoming {
+			fmt.Fprintf(&b,
+				"• <t:%d:F> — %s\n  <t:%d:R> → <t:%d:R>\n",
+				s.Start,
+				utils.MentionUsers(s.UserIDs),
+				s.Start, s.End,
+			)
+		}
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   "Upcoming Shifts",
+			Value:  b.String(),
+			Inline: false,
+		})
+
 		for _, s := range upcoming {
 			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 				Name:   fmt.Sprintf("Shift at <t:%d:F>", s.Start),
